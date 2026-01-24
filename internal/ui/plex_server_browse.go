@@ -13,6 +13,7 @@ import (
 type serverItem struct {
 	title            string
 	clientIdentifier string
+	scheme           string
 	address          string
 	local            string
 	port             string
@@ -108,7 +109,11 @@ func (m *model) selectServerCmd(server serverItem) tea.Cmd {
 
 	return func() tea.Msg {
 
-		libraries, err := plexClient.FetchLibrary(fmt.Sprintf("%s:%s", server.address, server.port))
+		serverAddr := fmt.Sprintf("%s:%s", server.address, server.port)
+		if server.scheme != "" {
+			serverAddr = fmt.Sprintf("%s://%s", server.scheme, serverAddr)
+		}
+		libraries, err := plexClient.FetchLibrary(serverAddr)
 		log.Debug(fmt.Sprintf("Fetched libraries: %v", libraries))
 
 		if err != nil {
@@ -184,6 +189,7 @@ func (m *model) handleServerBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 			items = append(items, serverItem{
 				title:            server.Name,
 				clientIdentifier: server.ClientIdentifier,
+				scheme:           server.Scheme,
 				address:          server.Address,
 				local:            server.Local,
 				port:             server.Port,
