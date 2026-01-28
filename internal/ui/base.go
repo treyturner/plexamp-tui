@@ -35,29 +35,39 @@ func (i item) FilterValue() string    { return string(i.Name) }
 func (i item) GetMetadataKey() string { return i.MetadataKey }
 
 type model struct {
-	playbackList      list.Model
-	artistList        list.Model // Plex artist browse list
-	albumList         list.Model // Plex album browse list
-	playlistList      list.Model // Plex playlist browse list
-	serverList        list.Model // Plex server browse list
-	playerList        list.Model // Plex player browse list
-	selected          string
-	status            string
-	width             int
-	height            int
-	isPlaying         bool
-	lastCommand       string
-	currentTrack      string
-	volume            int
-	durationMs        int
-	positionMs        int
-	lastUpdate        time.Time
-	usingDefaultCfg   bool
-	shuffle           bool // Tracks shuffle state
-	plexAuthenticated bool // Plex authentication status
-	timelineRequestID int
+	playbackList        list.Model
+	artistList          list.Model // Plex artist browse list
+	artistAlbumList     list.Model // Plex artist album browse list
+	albumList           list.Model // Plex album browse list
+	trackList           list.Model // Plex track browse list
+	playlistList        list.Model // Plex playlist browse list
+	serverList          list.Model // Plex server browse list
+	playerList          list.Model // Plex player browse list
+	selected            string
+	status              string
+	width               int
+	height              int
+	isPlaying           bool
+	lastCommand         string
+	currentTrack        string
+	volume              int
+	durationMs          int
+	positionMs          int
+	lastUpdate          time.Time
+	usingDefaultCfg     bool
+	shuffle             bool // Tracks shuffle state
+	plexAuthenticated   bool // Plex authentication status
+	timelineRequestID   int
+	currentArtistKey    string
+	currentArtistName   string
+	currentAlbumKey     string
+	currentAlbumName    string
+	currentPlaylistKey  string
+	currentPlaylistName string
+	trackReturnMode     string
 
-	// Panel mode: "servers", "playback", "edit", "plex-servers", "plex-libraries", "plex-artists", "plex-albums"
+	// Panel mode: "servers", "playback", "edit", "plex-servers", "plex-libraries", "plex-artists",
+	// "plex-artist-albums", "plex-albums", "plex-album-tracks", "plex-playlists", "plex-playlist-tracks"
 	panelMode      string
 	playbackConfig *config.Favorites
 	config         *config.Config // Store config for server ID access
@@ -180,7 +190,9 @@ func NewUiManager(logger *logger.Logger, config *config.Config, manager *config.
 	m := model{
 		playbackList:      playbackList,
 		artistList:        list.New([]list.Item{}, list.NewDefaultDelegate(), 0, 0),
+		artistAlbumList:   list.New([]list.Item{}, list.NewDefaultDelegate(), 0, 0),
 		albumList:         list.New([]list.Item{}, list.NewDefaultDelegate(), 0, 0),
+		trackList:         list.New([]list.Item{}, list.NewDefaultDelegate(), 0, 0),
 		playlistList:      list.New([]list.Item{}, list.NewDefaultDelegate(), 0, 0),
 		serverList:        list.New([]list.Item{}, list.NewDefaultDelegate(), 0, 0),
 		playerList:        list.New([]list.Item{}, list.NewDefaultDelegate(), 0, 0),
@@ -286,7 +298,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		m.playbackList.SetSize(msg.Width/2-4, availableHeight)
 		m.artistList.SetSize(msg.Width/2-4, availableHeight)
+		m.artistAlbumList.SetSize(msg.Width/2-4, availableHeight)
 		m.albumList.SetSize(msg.Width/2-4, availableHeight)
+		m.trackList.SetSize(msg.Width/2-4, availableHeight)
 		m.playlistList.SetSize(msg.Width/2-4, availableHeight)
 		m.serverList.SetSize(msg.Width/2-4, availableHeight)
 		m.playerList.SetSize(msg.Width/2-4, availableHeight)
@@ -321,6 +335,30 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Call handleAlbumBrowseUpdate which will modify the model directly
 			updatedModel, cmd := modelPtr.handleAlbumBrowseUpdate(msg)
 			// The updated model might be a different instance, so we need to update our local copy
+			if updatedModel != nil {
+				if m2, ok := updatedModel.(model); ok {
+					m = m2
+				}
+			}
+			return m, cmd
+		}
+
+		// Handle artist album browse mode
+		if m.panelMode == "plex-artist-albums" {
+			modelPtr := &m
+			updatedModel, cmd := modelPtr.handleArtistAlbumBrowseUpdate(msg)
+			if updatedModel != nil {
+				if m2, ok := updatedModel.(model); ok {
+					m = m2
+				}
+			}
+			return m, cmd
+		}
+
+		// Handle album/playlist track browse mode
+		if m.panelMode == "plex-album-tracks" || m.panelMode == "plex-playlist-tracks" {
+			modelPtr := &m
+			updatedModel, cmd := modelPtr.handleTrackBrowseUpdate(msg)
 			if updatedModel != nil {
 				if m2, ok := updatedModel.(model); ok {
 					m = m2
@@ -502,6 +540,45 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case artistAlbumsFetchedMsg:
+		if m.panelMode == "plex-artist-albums" {
+			modelPtr := &m
+			updatedModel, cmd := modelPtr.handleArtistAlbumBrowseUpdate(msg)
+			if updatedModel != nil {
+				if m2, ok := updatedModel.(model); ok {
+					m = m2
+				}
+			}
+			return m, cmd
+		}
+		return m, nil
+
+	case tracksFetchedMsg:
+		if m.panelMode == "plex-album-tracks" || m.panelMode == "plex-playlist-tracks" {
+			modelPtr := &m
+			updatedModel, cmd := modelPtr.handleTrackBrowseUpdate(msg)
+			if updatedModel != nil {
+				if m2, ok := updatedModel.(model); ok {
+					m = m2
+				}
+			}
+			return m, cmd
+		}
+		return m, nil
+
+	case trackPlaybackMsg:
+		if m.panelMode == "plex-album-tracks" || m.panelMode == "plex-playlist-tracks" {
+			modelPtr := &m
+			updatedModel, cmd := modelPtr.handleTrackBrowseUpdate(msg)
+			if updatedModel != nil {
+				if m2, ok := updatedModel.(model); ok {
+					m = m2
+				}
+			}
+			return m, cmd
+		}
+		return m, nil
+
 	case playlistsFetchedMsg:
 		// Forward the message to the playlist browse handler
 		if m.panelMode == "plex-playlists" {
@@ -551,8 +628,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.playbackList, cmd = m.playbackList.Update(msg)
 	} else if m.panelMode == "plex-artists" {
 		m.artistList, cmd = m.artistList.Update(msg)
+	} else if m.panelMode == "plex-artist-albums" {
+		m.artistAlbumList, cmd = m.artistAlbumList.Update(msg)
 	} else if m.panelMode == "plex-albums" {
 		m.albumList, cmd = m.albumList.Update(msg)
+	} else if m.panelMode == "plex-album-tracks" || m.panelMode == "plex-playlist-tracks" {
+		m.trackList, cmd = m.trackList.Update(msg)
 	} else if m.panelMode == "plex-playlists" {
 		m.playlistList, cmd = m.playlistList.Update(msg)
 	} else if m.panelMode == "plex-servers" {
@@ -581,8 +662,12 @@ func (m model) View() string {
 		leftPanelContent = m.playbackList.View()
 	case "plex-artists":
 		leftPanelContent = m.artistList.View()
+	case "plex-artist-albums":
+		leftPanelContent = m.artistAlbumList.View()
 	case "plex-albums":
 		leftPanelContent = m.albumList.View()
+	case "plex-album-tracks", "plex-playlist-tracks":
+		leftPanelContent = m.trackList.View()
 	case "plex-playlists":
 		leftPanelContent = m.playlistList.View()
 	case "plex-servers":

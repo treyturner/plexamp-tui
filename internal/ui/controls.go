@@ -9,10 +9,16 @@ func (m *model) refreshCurrentPanel() tea.Cmd {
 	switch m.panelMode {
 	case "plex-artists":
 		return m.fetchArtistsCmd()
+	case "plex-artist-albums":
+		return m.fetchArtistAlbumsCmd(m.currentArtistKey)
 	case "plex-albums":
 		return m.fetchAlbumsCmd()
+	case "plex-album-tracks":
+		return m.fetchAlbumTracksCmd(m.currentAlbumKey)
 	case "plex-playlists":
 		return m.fetchPlaylistsCmd()
+	case "plex-playlist-tracks":
+		return m.fetchPlaylistTracksCmd(m.currentPlaylistKey)
 	default:
 		return nil
 	}
