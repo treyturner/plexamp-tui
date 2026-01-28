@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"plexamp-tui/internal/config"
 	"sort"
+	"strings"
 )
 
 // =====================
@@ -59,11 +60,27 @@ type PlexPlaylist struct {
 	Type      string `xml:"playlistType,attr"`
 }
 
+// PlexTrack represents a track from the Plex library
+type PlexTrack struct {
+	RatingKey        string `xml:"ratingKey,attr"`
+	Title            string `xml:"title,attr"`
+	ParentTitle      string `xml:"parentTitle,attr"`
+	GrandparentTitle string `xml:"grandparentTitle,attr"`
+	Index            int    `xml:"index,attr"`
+	Duration         int    `xml:"duration,attr"`
+}
+
 // PlexMediaContainer is the root element for Plex API responses
 type PlexMediaContainer struct {
 	XMLName     xml.Name        `xml:"MediaContainer"`
 	Size        int             `xml:"size,attr"`
 	Directories []PlexDirectory `xml:"Directory"`
+}
+
+type PlexTrackContainer struct {
+	XMLName xml.Name    `xml:"MediaContainer"`
+	Size    int         `xml:"size,attr"`
+	Tracks  []PlexTrack `xml:"Track"`
 }
 
 type PlexPlaylistContainer struct {
@@ -76,10 +93,20 @@ type PlexPlaylistContainer struct {
 // Library Fetching
 // =====================
 
+func buildPlexURL(serverAddr, path string) string {
+	addrLower := strings.ToLower(serverAddr)
+	if strings.HasPrefix(addrLower, "http://") || strings.HasPrefix(addrLower, "https://") {
+		return fmt.Sprintf("%s%s", strings.TrimRight(serverAddr, "/"), path)
+	}
+	return fmt.Sprintf("http://%s%s", serverAddr, path)
+}
+
 // FetchArtists retrieves all artists from the Plex library
 func (p *PlexClient) FetchArtists(serverAddr, libraryID, token string) ([]PlexArtist, error) {
-	urlStr := fmt.Sprintf("http://%s/library/sections/%s/all?type=8&X-Plex-Token=%s",
-		serverAddr, libraryID, url.QueryEscape(token))
+	urlStr := buildPlexURL(
+		serverAddr,
+		fmt.Sprintf("/library/sections/%s/all?type=8&X-Plex-Token=%s", libraryID, url.QueryEscape(token)),
+	)
 
 	p.logger.Debug(fmt.Sprintf("Fetching artists from: %s", urlStr))
 
@@ -129,8 +156,10 @@ func (p *PlexClient) FetchArtists(serverAddr, libraryID, token string) ([]PlexAr
 
 // FetchAlbums retrieves all albums from the Plex library
 func (p *PlexClient) FetchAlbums(serverAddr, libraryID, token string) ([]PlexAlbum, error) {
-	urlStr := fmt.Sprintf("http://%s/library/sections/%s/all?type=9&X-Plex-Token=%s",
-		serverAddr, libraryID, url.QueryEscape(token))
+	urlStr := buildPlexURL(
+		serverAddr,
+		fmt.Sprintf("/library/sections/%s/all?type=9&X-Plex-Token=%s", libraryID, url.QueryEscape(token)),
+	)
 
 	p.logger.Debug(fmt.Sprintf("Fetching albums from: %s", urlStr))
 
@@ -182,8 +211,10 @@ func (p *PlexClient) FetchAlbums(serverAddr, libraryID, token string) ([]PlexAlb
 
 // FetchArtistAlbums retrieves albums for a specific artist
 func (p *PlexClient) FetchArtistAlbums(serverAddr, artistRatingKey, token string) ([]PlexAlbum, error) {
-	urlStr := fmt.Sprintf("http://%s/library/metadata/%s/children?X-Plex-Token=%s",
-		serverAddr, artistRatingKey, url.QueryEscape(token))
+	urlStr := buildPlexURL(
+		serverAddr,
+		fmt.Sprintf("/library/metadata/%s/children?X-Plex-Token=%s", artistRatingKey, url.QueryEscape(token)),
+	)
 
 	p.logger.Debug(fmt.Sprintf("Fetching albums for artist %s from: %s", artistRatingKey, urlStr))
 
@@ -207,11 +238,31 @@ func (p *PlexClient) FetchArtistAlbums(serverAddr, artistRatingKey, token string
 		return nil, fmt.Errorf("failed to parse XML: %w", err)
 	}
 
-	return []PlexAlbum{}, nil
+	var albums []PlexAlbum
+	for _, dir := range container.Directories {
+		if dir.Type == "album" {
+			albums = append(albums, PlexAlbum{
+				RatingKey:   dir.RatingKey,
+				Title:       dir.Title,
+				ParentTitle: dir.ParentTitle,
+				Year:        dir.Year,
+				Type:        dir.Type,
+			})
+		}
+	}
+
+	sort.Slice(albums, func(i, j int) bool {
+		return albums[i].Title < albums[j].Title
+	})
+
+	return albums, nil
 }
 
 func (p *PlexClient) FetchPlaylists(serverAddr, token string) ([]PlexPlaylist, error) {
-	urlStr := fmt.Sprintf("http://%s/playlists?X-Plex-Token=%s", serverAddr, url.QueryEscape(token))
+	urlStr := buildPlexURL(
+		serverAddr,
+		fmt.Sprintf("/playlists?X-Plex-Token=%s", url.QueryEscape(token)),
+	)
 
 	p.logger.Debug(fmt.Sprintf("Fetching playlists from: %s", urlStr))
 
@@ -238,9 +289,74 @@ func (p *PlexClient) FetchPlaylists(serverAddr, token string) ([]PlexPlaylist, e
 	return container.Playlists, nil
 }
 
+func (p *PlexClient) FetchAlbumTracks(serverAddr, albumRatingKey, token string) ([]PlexTrack, error) {
+	urlStr := fmt.Sprintf("http://%s/library/metadata/%s/children?X-Plex-Token=%s",
+		serverAddr, albumRatingKey, url.QueryEscape(token))
+
+	p.logger.Debug(fmt.Sprintf("Fetching tracks for album %s from: %s", albumRatingKey, urlStr))
+
+	resp, err := http.Get(urlStr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch album tracks: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("server returned status %d", resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	var container PlexTrackContainer
+	if err := xml.Unmarshal(body, &container); err != nil {
+		return nil, fmt.Errorf("failed to parse XML: %w", err)
+	}
+
+	sort.Slice(container.Tracks, func(i, j int) bool {
+		return container.Tracks[i].Index < container.Tracks[j].Index
+	})
+
+	return container.Tracks, nil
+}
+
+func (p *PlexClient) FetchPlaylistTracks(serverAddr, playlistRatingKey, token string) ([]PlexTrack, error) {
+	urlStr := fmt.Sprintf("http://%s/playlists/%s/items?X-Plex-Token=%s",
+		serverAddr, playlistRatingKey, url.QueryEscape(token))
+
+	p.logger.Debug(fmt.Sprintf("Fetching tracks for playlist %s from: %s", playlistRatingKey, urlStr))
+
+	resp, err := http.Get(urlStr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch playlist tracks: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("server returned status %d", resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	var container PlexTrackContainer
+	if err := xml.Unmarshal(body, &container); err != nil {
+		return nil, fmt.Errorf("failed to parse XML: %w", err)
+	}
+
+	return container.Tracks, nil
+}
+
 func (p *PlexClient) FetchLibrary(serverAddr string) ([]config.PlexLibrary, error) {
 	token := p.GetPlexToken()
-	urlStr := fmt.Sprintf("http://%s/library/sections?X-Plex-Token=%s", serverAddr, url.QueryEscape(token))
+	urlStr := buildPlexURL(
+		serverAddr,
+		fmt.Sprintf("/library/sections?X-Plex-Token=%s", url.QueryEscape(token)),
+	)
 
 	p.logger.Debug(fmt.Sprintf("Fetching library from: %s", urlStr))
 
