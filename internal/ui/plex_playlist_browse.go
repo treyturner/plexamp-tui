@@ -118,6 +118,10 @@ func (m *model) initPlaylistBrowse() {
 				key.WithHelp("f", "Add/Remove from Favorites"),
 			),
 			key.NewBinding(
+				key.WithKeys("P"),
+				key.WithHelp("P", "Play Playlist"),
+			),
+			key.NewBinding(
 				key.WithKeys("R"),
 				key.WithHelp("R", "Refresh Playlists"),
 			),
@@ -176,7 +180,17 @@ func (m *model) handlePlaylistBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 
 		case "enter":
-			// Play selected album's tracks
+			// View selected playlist's tracks
+			if selected, ok := m.playlistList.SelectedItem().(playlistItem); ok {
+				log.Debug(fmt.Sprintf("Viewing playlist tracks: %s (ratingKey: %s)", selected.title, selected.ratingKey))
+				m.lastCommand = fmt.Sprintf("Viewing %s", selected.title)
+				m.trackReturnMode = "plex-playlists"
+				m.initPlaylistTrackBrowse(selected.title, selected.ratingKey)
+				return m, m.fetchPlaylistTracksCmd(selected.ratingKey)
+			}
+			return m, nil
+
+		case "P":
 			if selected, ok := m.playlistList.SelectedItem().(playlistItem); ok {
 				log.Debug(fmt.Sprintf("Playing playlist: %s (ratingKey: %s)", selected.title, selected.ratingKey))
 				m.lastCommand = fmt.Sprintf("Playing %s", selected.title)
@@ -198,7 +212,7 @@ func (m *model) handlePlaylistBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "R":
 			// Refresh album list
-			m.status = "Refreshing albums..."
+			m.status = "Refreshing playlists..."
 			return m, m.fetchPlaylistsCmd()
 
 		default:
