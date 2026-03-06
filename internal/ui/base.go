@@ -572,16 +572,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case trackPlaybackMsg:
-		if m.panelMode == "plex-album-tracks" || m.panelMode == "plex-playlist-tracks" {
-			modelPtr := &m
-			updatedModel, cmd := modelPtr.handleTrackBrowseUpdate(msg)
-			if updatedModel != nil {
-				if m2, ok := updatedModel.(model); ok {
-					m = m2
-				}
-			}
-			return m, cmd
+		if msg.success {
+			m.lastCommand = "Track Playback Started"
+			m.status = "Playback triggered successfully"
+			return m, m.beginPlaybackRefresh("")
 		}
+
+		m.lastCommand = "Playback Failed"
+		m.status = fmt.Sprintf("Playback error: %v", msg.err)
+		m.suppressTimeline = false
 		return m, nil
 
 	case playlistsFetchedMsg:
