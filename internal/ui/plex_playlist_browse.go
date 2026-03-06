@@ -289,6 +289,7 @@ func (m *model) handlePlaylistBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.success {
 			m.lastCommand = "Playlist Playback Started"
 			m.status = "Playback triggered successfully"
+			return m, m.beginPlaybackRefresh("")
 		} else {
 			m.lastCommand = "Playback Failed"
 			m.status = fmt.Sprintf("Playback error: %v", msg.err)
