@@ -233,17 +233,6 @@ func (m *model) handleTrackBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.status = fmt.Sprintf("Loaded %d tracks", len(msg.tracks))
 		return m, tea.Batch(tea.ClearScreen, func() tea.Msg { return nil })
 
-	case trackPlaybackMsg:
-		if msg.success {
-			m.lastCommand = "Track Playback Started"
-			m.status = "Playback triggered successfully"
-			return m, m.beginPlaybackRefresh("")
-		} else {
-			m.lastCommand = "Playback Failed"
-			m.status = fmt.Sprintf("Playback error: %v", msg.err)
-			m.suppressTimeline = false
-		}
-		return m, nil
 	}
 
 	var listCmd tea.Cmd
