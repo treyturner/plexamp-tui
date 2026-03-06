@@ -293,6 +293,7 @@ func (m *model) handleAlbumBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.success {
 			m.lastCommand = "Album Playback Started"
 			m.status = "Playback triggered successfully"
+			return m, m.beginPlaybackRefresh("")
 		} else {
 			m.lastCommand = "Playback Failed"
 			m.status = fmt.Sprintf("Playback error: %v", msg.err)

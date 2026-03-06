@@ -54,6 +54,7 @@ type model struct {
 	durationMs          int
 	positionMs          int
 	lastUpdate          time.Time
+	suppressTimeline    bool
 	usingDefaultCfg     bool
 	shuffle             bool // Tracks shuffle state
 	plexAuthenticated   bool // Plex authentication status
@@ -486,6 +487,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.RequestID != m.timelineRequestID {
 			return m, nil
 		}
+		if m.suppressTimeline {
+			return m, nil
+		}
 		m.currentTrack = msg.TrackText
 		m.isPlaying = msg.IsPlaying
 		m.durationMs = msg.Duration
@@ -506,6 +510,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.success {
 			m.lastCommand = "Playback Started"
 			m.status = "Playback triggered successfully"
+			return m, m.beginPlaybackRefresh("")
 		} else {
 			m.lastCommand = "Playback Failed"
 			m.status = fmt.Sprintf("Playback error: %v", msg.err)
@@ -788,6 +793,34 @@ func (m *model) pollTimeline() tea.Cmd {
 // =====================
 // Helpers
 // =====================
+
+func (m *model) beginPlaybackRefresh(pendingText string) tea.Cmd {
+	if pendingText == "" {
+		pendingText = "Loading..."
+	}
+	// Clear stale state and avoid showing the previous track while we wait for the new timeline.
+	m.currentTrack = pendingText
+	m.isPlaying = true
+	m.durationMs = 0
+	m.positionMs = 0
+	m.lastUpdate = time.Time{}
+	m.suppressTimeline = false
+	m.timelineRequestID++
+	return m.pollTimeline()
+}
+
+func (m *model) beginPlaybackPending(pendingText string) {
+	if pendingText == "" {
+		pendingText = "Loading..."
+	}
+	m.currentTrack = pendingText
+	m.isPlaying = true
+	m.durationMs = 0
+	m.positionMs = 0
+	m.lastUpdate = time.Time{}
+	m.suppressTimeline = true
+	m.timelineRequestID++
+}
 
 func (m model) currentPosition() int {
 	pos := m.positionMs

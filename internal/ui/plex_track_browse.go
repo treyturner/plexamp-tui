@@ -177,6 +177,7 @@ func (m *model) handleTrackBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if selected, ok := m.trackList.SelectedItem().(trackItem); ok {
 				log.Debug(fmt.Sprintf("Playing track: %s (ratingKey: %s)", selected.title, selected.ratingKey))
 				m.lastCommand = fmt.Sprintf("Playing %s", selected.title)
+				m.beginPlaybackPending("Loading track...")
 				return m, m.playTrackCmd(selected.ratingKey)
 			}
 			return m, nil
@@ -236,9 +237,11 @@ func (m *model) handleTrackBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.success {
 			m.lastCommand = "Track Playback Started"
 			m.status = "Playback triggered successfully"
+			return m, m.beginPlaybackRefresh("")
 		} else {
 			m.lastCommand = "Playback Failed"
 			m.status = fmt.Sprintf("Playback error: %v", msg.err)
+			m.suppressTimeline = false
 		}
 		return m, nil
 	}
