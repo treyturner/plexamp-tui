@@ -75,7 +75,7 @@ func TestTrackPlaybackMsgAppliesLatestResponse(t *testing.T) {
 	}
 }
 
-func TestTimelineUpdateIgnoresNonRequestedTrackKey(t *testing.T) {
+func TestTimelineUpdateClearsPendingOnNonRequestedTrackKey(t *testing.T) {
 	initTestLogger(t)
 
 	m := model{
@@ -99,11 +99,14 @@ func TestTimelineUpdateIgnoresNonRequestedTrackKey(t *testing.T) {
 	}
 
 	updated := updatedModel.(model)
-	if updated.currentTrack != "Loading..." {
-		t.Fatalf("expected current track to stay pending, got %q", updated.currentTrack)
+	if updated.currentTrack != "Artist - Old Track (Album)" {
+		t.Fatalf("expected current track to update, got %q", updated.currentTrack)
 	}
-	if updated.pendingTrackKey != "222" {
-		t.Fatalf("expected pending track key to remain set, got %q", updated.pendingTrackKey)
+	if updated.pendingTrackKey != "" {
+		t.Fatalf("expected pending track key to clear, got %q", updated.pendingTrackKey)
+	}
+	if updated.positionMs != 25000 {
+		t.Fatalf("expected position to update, got %d", updated.positionMs)
 	}
 }
 
@@ -138,5 +141,36 @@ func TestTimelineUpdateAppliesRequestedTrackKey(t *testing.T) {
 	}
 	if updated.positionMs != 1000 {
 		t.Fatalf("expected position to update, got %d", updated.positionMs)
+	}
+}
+
+func TestTimelineUpdateKeepsPendingWhenTrackKeyIsMissing(t *testing.T) {
+	initTestLogger(t)
+
+	m := model{
+		timelineRequestID: 3,
+		pendingTrackKey:   "222",
+		currentTrack:      "Loading...",
+	}
+
+	updatedModel, cmd := m.Update(trackMsgWithState{
+		RequestID: 3,
+		TrackText: "Artist - Pending Resolution (Album)",
+		TrackKey:  "",
+		IsPlaying: true,
+		Duration:  90000,
+		Position:  1000,
+		Volume:    65,
+	})
+	if cmd != nil {
+		t.Fatalf("expected nil command for timeline update, got non-nil")
+	}
+
+	updated := updatedModel.(model)
+	if updated.currentTrack != "Artist - Pending Resolution (Album)" {
+		t.Fatalf("expected current track to update, got %q", updated.currentTrack)
+	}
+	if updated.pendingTrackKey != "222" {
+		t.Fatalf("expected pending track key to remain set, got %q", updated.pendingTrackKey)
 	}
 }
