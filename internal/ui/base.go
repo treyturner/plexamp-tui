@@ -59,6 +59,8 @@ type model struct {
 	shuffle             bool // Tracks shuffle state
 	plexAuthenticated   bool // Plex authentication status
 	timelineRequestID   int
+	trackPlaybackReqID  int
+	pendingTrackKey     string
 	currentArtistKey    string
 	currentArtistName   string
 	currentAlbumKey     string
@@ -95,6 +97,7 @@ type Timeline struct {
 }
 
 type Track struct {
+	RatingKey        string `xml:"ratingKey,attr"`
 	Title            string `xml:"title,attr"`
 	ParentTitle      string `xml:"parentTitle,attr"`
 	GrandparentTitle string `xml:"grandparentTitle,attr"`
@@ -108,6 +111,7 @@ type (
 
 type trackMsgWithState struct {
 	TrackText string
+	TrackKey  string
 	IsPlaying bool
 	Duration  int
 	Position  int
@@ -490,6 +494,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.suppressTimeline {
 			return m, nil
 		}
+		if m.pendingTrackKey != "" && msg.TrackKey != "" && msg.TrackKey != m.pendingTrackKey {
+			log.Debug(fmt.Sprintf(
+				"Ignoring timeline update for non-requested track key (got=%s, want=%s)",
+				msg.TrackKey, m.pendingTrackKey),
+			)
+			return m, nil
+		}
+		if m.pendingTrackKey != "" && msg.TrackKey == m.pendingTrackKey {
+			m.pendingTrackKey = ""
+		}
 		m.currentTrack = msg.TrackText
 		m.isPlaying = msg.IsPlaying
 		m.durationMs = msg.Duration
@@ -572,15 +586,24 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case trackPlaybackMsg:
+		if msg.requestID != m.trackPlaybackReqID {
+			log.Debug(fmt.Sprintf(
+				"Ignoring stale trackPlaybackMsg (requestID=%d, current=%d)",
+				msg.requestID, m.trackPlaybackReqID),
+			)
+			return m, nil
+		}
+
 		if msg.success {
 			m.lastCommand = "Track Playback Started"
 			m.status = "Playback triggered successfully"
-			return m, m.beginPlaybackRefresh("")
+			return m, m.beginPlaybackRefreshForTrack("", msg.ratingKey)
 		}
 
 		m.lastCommand = "Playback Failed"
 		m.status = fmt.Sprintf("Playback error: %v", msg.err)
 		m.suppressTimeline = false
+		m.pendingTrackKey = ""
 		return m, nil
 
 	case playlistsFetchedMsg:
@@ -737,18 +760,42 @@ func (m *model) pollTimeline() tea.Cmd {
 		url := fmt.Sprintf("http://%s:32500/player/timeline/poll?wait=1&includeMetadata=1&commandID=1&type=music", selected)
 		resp, err := http.Get(url)
 		if err != nil {
-			return trackMsgWithState{RequestID: reqID, TrackText: "", IsPlaying: false, Duration: 0, Position: 0, Volume: 0}
+			return trackMsgWithState{
+				RequestID: reqID,
+				TrackText: "",
+				TrackKey:  "",
+				IsPlaying: false,
+				Duration:  0,
+				Position:  0,
+				Volume:    0,
+			}
 		}
 		defer resp.Body.Close()
 
 		data, err := io.ReadAll(resp.Body)
 		if err != nil {
-			return trackMsgWithState{RequestID: reqID, TrackText: "", IsPlaying: false, Duration: 0, Position: 0, Volume: 0}
+			return trackMsgWithState{
+				RequestID: reqID,
+				TrackText: "",
+				TrackKey:  "",
+				IsPlaying: false,
+				Duration:  0,
+				Position:  0,
+				Volume:    0,
+			}
 		}
 
 		var mc MediaContainer
 		if err := xml.Unmarshal(data, &mc); err != nil {
-			return trackMsgWithState{RequestID: reqID, TrackText: "", IsPlaying: false, Duration: 0, Position: 0, Volume: 0}
+			return trackMsgWithState{
+				RequestID: reqID,
+				TrackText: "",
+				TrackKey:  "",
+				IsPlaying: false,
+				Duration:  0,
+				Position:  0,
+				Volume:    0,
+			}
 		}
 
 		var chosen *Timeline
@@ -764,11 +811,13 @@ func (m *model) pollTimeline() tea.Cmd {
 		}
 
 		track := ""
+		trackKey := ""
 		isPlaying := false
 		duration := 0
 		position := 0
 		volume := 0
 		if chosen != nil {
+			trackKey = chosen.Track.RatingKey
 			if chosen.Track.Title != "" {
 				track = fmt.Sprintf("%s - %s (%s)", chosen.Track.GrandparentTitle, chosen.Track.Title, chosen.Track.ParentTitle)
 			}
@@ -780,6 +829,7 @@ func (m *model) pollTimeline() tea.Cmd {
 
 		return trackMsgWithState{
 			TrackText: track,
+			TrackKey:  trackKey,
 			IsPlaying: isPlaying,
 			Duration:  duration,
 			Position:  position,
@@ -794,6 +844,10 @@ func (m *model) pollTimeline() tea.Cmd {
 // =====================
 
 func (m *model) beginPlaybackRefresh(pendingText string) tea.Cmd {
+	return m.beginPlaybackRefreshForTrack(pendingText, "")
+}
+
+func (m *model) beginPlaybackRefreshForTrack(pendingText, trackKey string) tea.Cmd {
 	if pendingText == "" {
 		pendingText = "Loading..."
 	}
@@ -804,11 +858,16 @@ func (m *model) beginPlaybackRefresh(pendingText string) tea.Cmd {
 	m.positionMs = 0
 	m.lastUpdate = time.Time{}
 	m.suppressTimeline = false
+	m.pendingTrackKey = trackKey
 	m.timelineRequestID++
 	return m.pollTimeline()
 }
 
 func (m *model) beginPlaybackPending(pendingText string) {
+	m.beginPlaybackPendingForTrack(pendingText, "")
+}
+
+func (m *model) beginPlaybackPendingForTrack(pendingText, trackKey string) {
 	if pendingText == "" {
 		pendingText = "Loading..."
 	}
@@ -818,6 +877,7 @@ func (m *model) beginPlaybackPending(pendingText string) {
 	m.positionMs = 0
 	m.lastUpdate = time.Time{}
 	m.suppressTimeline = true
+	m.pendingTrackKey = trackKey
 	m.timelineRequestID++
 }
 

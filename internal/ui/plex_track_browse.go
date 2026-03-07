@@ -10,14 +10,17 @@ import (
 )
 
 type tracksFetchedMsg struct {
-	tracks  []plex.PlexTrack
-	context string
-	err     error
+	tracks     []plex.PlexTrack
+	context    string
+	requestKey string
+	err        error
 }
 
 type trackPlaybackMsg struct {
-	success bool
-	err     error
+	success   bool
+	requestID int
+	ratingKey string
+	err       error
 }
 
 type trackItem struct {
@@ -84,21 +87,34 @@ func (m *model) fetchAlbumTracksCmd(albumRatingKey string) tea.Cmd {
 
 	if m.config == nil {
 		return func() tea.Msg {
-			return tracksFetchedMsg{context: "album", err: fmt.Errorf("no config available")}
+			return tracksFetchedMsg{
+				context:    "album",
+				requestKey: albumRatingKey,
+				err:        fmt.Errorf("no config available"),
+			}
 		}
 	}
 
 	token := plexClient.GetPlexToken()
 	if token == "" {
 		return func() tea.Msg {
-			return tracksFetchedMsg{context: "album", err: fmt.Errorf("no Plex token found - run with --auth flag")}
+			return tracksFetchedMsg{
+				context:    "album",
+				requestKey: albumRatingKey,
+				err:        fmt.Errorf("no Plex token found - run with --auth flag"),
+			}
 		}
 	}
 
 	serverAddr := m.config.PlexServerAddr
 	return func() tea.Msg {
 		tracks, err := plexClient.FetchAlbumTracks(serverAddr, albumRatingKey, token)
-		return tracksFetchedMsg{tracks: tracks, context: "album", err: err}
+		return tracksFetchedMsg{
+			tracks:     tracks,
+			context:    "album",
+			requestKey: albumRatingKey,
+			err:        err,
+		}
 	}
 }
 
@@ -110,34 +126,57 @@ func (m *model) fetchPlaylistTracksCmd(playlistRatingKey string) tea.Cmd {
 
 	if m.config == nil {
 		return func() tea.Msg {
-			return tracksFetchedMsg{context: "playlist", err: fmt.Errorf("no config available")}
+			return tracksFetchedMsg{
+				context:    "playlist",
+				requestKey: playlistRatingKey,
+				err:        fmt.Errorf("no config available"),
+			}
 		}
 	}
 
 	token := plexClient.GetPlexToken()
 	if token == "" {
 		return func() tea.Msg {
-			return tracksFetchedMsg{context: "playlist", err: fmt.Errorf("no Plex token found - run with --auth flag")}
+			return tracksFetchedMsg{
+				context:    "playlist",
+				requestKey: playlistRatingKey,
+				err:        fmt.Errorf("no Plex token found - run with --auth flag"),
+			}
 		}
 	}
 
 	serverAddr := m.config.PlexServerAddr
 	return func() tea.Msg {
 		tracks, err := plexClient.FetchPlaylistTracks(serverAddr, playlistRatingKey, token)
-		return tracksFetchedMsg{tracks: tracks, context: "playlist", err: err}
+		return tracksFetchedMsg{
+			tracks:     tracks,
+			context:    "playlist",
+			requestKey: playlistRatingKey,
+			err:        err,
+		}
 	}
 }
 
-func (m *model) playTrackCmd(ratingKey string) tea.Cmd {
+func (m *model) playTrackCmd(ratingKey string, requestID int) tea.Cmd {
 	if m.selected == "" {
 		return func() tea.Msg {
-			return trackPlaybackMsg{success: false, err: fmt.Errorf("no server selected")}
+			return trackPlaybackMsg{
+				success:   false,
+				requestID: requestID,
+				ratingKey: ratingKey,
+				err:       fmt.Errorf("no server selected"),
+			}
 		}
 	}
 
 	if m.config == nil {
 		return func() tea.Msg {
-			return trackPlaybackMsg{success: false, err: fmt.Errorf("no config available")}
+			return trackPlaybackMsg{
+				success:   false,
+				requestID: requestID,
+				ratingKey: ratingKey,
+				err:       fmt.Errorf("no config available"),
+			}
 		}
 	}
 
@@ -148,9 +187,18 @@ func (m *model) playTrackCmd(ratingKey string) tea.Cmd {
 	return func() tea.Msg {
 		err := PlayMetadata(serverIP, serverID, ratingKey, shuffle)
 		if err != nil {
-			return trackPlaybackMsg{success: false, err: err}
+			return trackPlaybackMsg{
+				success:   false,
+				requestID: requestID,
+				ratingKey: ratingKey,
+				err:       err,
+			}
 		}
-		return trackPlaybackMsg{success: true}
+		return trackPlaybackMsg{
+			success:   true,
+			requestID: requestID,
+			ratingKey: ratingKey,
+		}
 	}
 }
 
@@ -177,8 +225,10 @@ func (m *model) handleTrackBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if selected, ok := m.trackList.SelectedItem().(trackItem); ok {
 				log.Debug(fmt.Sprintf("Playing track: %s (ratingKey: %s)", selected.title, selected.ratingKey))
 				m.lastCommand = fmt.Sprintf("Playing %s", selected.title)
-				m.beginPlaybackPending("Loading track...")
-				return m, m.playTrackCmd(selected.ratingKey)
+				m.trackPlaybackReqID++
+				requestID := m.trackPlaybackReqID
+				m.beginPlaybackPendingForTrack("Loading track...", selected.ratingKey)
+				return m, m.playTrackCmd(selected.ratingKey, requestID)
 			}
 			return m, nil
 
@@ -189,7 +239,35 @@ func (m *model) handleTrackBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case tracksFetchedMsg:
-		log.Debug(fmt.Sprintf("tracksFetchedMsg received with %d tracks, error: %v", len(msg.tracks), msg.err))
+		log.Debug(fmt.Sprintf(
+			"tracksFetchedMsg received with %d tracks, context=%s, requestKey=%s, error=%v",
+			len(msg.tracks), msg.context, msg.requestKey, msg.err),
+		)
+
+		switch msg.context {
+		case "album":
+			// Ignore stale/mismatched fetches so late responses cannot overwrite the active browse list.
+			if m.panelMode != "plex-album-tracks" || msg.requestKey != m.currentAlbumKey {
+				log.Debug(fmt.Sprintf(
+					"Ignoring stale album track response (requestKey=%s, currentAlbumKey=%s, panelMode=%s)",
+					msg.requestKey, m.currentAlbumKey, m.panelMode),
+				)
+				return m, nil
+			}
+		case "playlist":
+			// Ignore stale/mismatched fetches so late responses cannot overwrite the active browse list.
+			if m.panelMode != "plex-playlist-tracks" || msg.requestKey != m.currentPlaylistKey {
+				log.Debug(fmt.Sprintf(
+					"Ignoring stale playlist track response (requestKey=%s, currentPlaylistKey=%s, panelMode=%s)",
+					msg.requestKey, m.currentPlaylistKey, m.panelMode),
+				)
+				return m, nil
+			}
+		default:
+			log.Debug(fmt.Sprintf("Ignoring track response with unknown context: %s", msg.context))
+			return m, nil
+		}
+
 		if msg.err != nil {
 			errMsg := fmt.Sprintf("Error fetching tracks: %v", msg.err)
 			m.status = errMsg
