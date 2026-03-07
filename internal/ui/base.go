@@ -494,14 +494,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.suppressTimeline {
 			return m, nil
 		}
-		if m.pendingTrackKey != "" && msg.TrackKey != "" && msg.TrackKey != m.pendingTrackKey {
-			log.Debug(fmt.Sprintf(
-				"Ignoring timeline update for non-requested track key (got=%s, want=%s)",
-				msg.TrackKey, m.pendingTrackKey),
-			)
-			return m, nil
-		}
-		if m.pendingTrackKey != "" && msg.TrackKey == m.pendingTrackKey {
+		if m.pendingTrackKey != "" && msg.TrackKey != "" {
+			if msg.TrackKey != m.pendingTrackKey {
+				log.Debug(fmt.Sprintf(
+					"Timeline track key diverged from pending request (got=%s, want=%s); clearing pending filter",
+					msg.TrackKey, m.pendingTrackKey),
+				)
+			}
 			m.pendingTrackKey = ""
 		}
 		m.currentTrack = msg.TrackText
