@@ -11,8 +11,9 @@ import (
 )
 
 type artistAlbumsFetchedMsg struct {
-	albums []plex.PlexAlbum
-	err    error
+	albums     []plex.PlexAlbum
+	requestKey string
+	err        error
 }
 
 func (m *model) fetchArtistAlbumsCmd(artistRatingKey string) tea.Cmd {
@@ -23,14 +24,20 @@ func (m *model) fetchArtistAlbumsCmd(artistRatingKey string) tea.Cmd {
 
 	if m.config == nil {
 		return func() tea.Msg {
-			return artistAlbumsFetchedMsg{err: fmt.Errorf("no config available")}
+			return artistAlbumsFetchedMsg{
+				requestKey: artistRatingKey,
+				err:        fmt.Errorf("no config available"),
+			}
 		}
 	}
 
 	token := plexClient.GetPlexToken()
 	if token == "" {
 		return func() tea.Msg {
-			return artistAlbumsFetchedMsg{err: fmt.Errorf("no Plex token found - run with --auth flag")}
+			return artistAlbumsFetchedMsg{
+				requestKey: artistRatingKey,
+				err:        fmt.Errorf("no Plex token found - run with --auth flag"),
+			}
 		}
 	}
 
@@ -38,7 +45,11 @@ func (m *model) fetchArtistAlbumsCmd(artistRatingKey string) tea.Cmd {
 
 	return func() tea.Msg {
 		albums, err := plexClient.FetchArtistAlbums(serverAddr, artistRatingKey, token)
-		return artistAlbumsFetchedMsg{albums: albums, err: err}
+		return artistAlbumsFetchedMsg{
+			albums:     albums,
+			requestKey: artistRatingKey,
+			err:        err,
+		}
 	}
 }
 
@@ -149,7 +160,17 @@ func (m *model) handleArtistAlbumBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) 
 		}
 
 	case artistAlbumsFetchedMsg:
-		log.Debug(fmt.Sprintf("artistAlbumsFetchedMsg received with %d albums, error: %v", len(msg.albums), msg.err))
+		log.Debug(fmt.Sprintf(
+			"artistAlbumsFetchedMsg received with %d albums, requestKey=%s, error: %v",
+			len(msg.albums), msg.requestKey, msg.err),
+		)
+		if msg.requestKey != m.currentArtistKey {
+			log.Debug(fmt.Sprintf(
+				"Ignoring stale artist album response (requestKey=%s, currentArtistKey=%s, panelMode=%s)",
+				msg.requestKey, m.currentArtistKey, m.panelMode),
+			)
+			return m, nil
+		}
 		if msg.err != nil {
 			errMsg := fmt.Sprintf("Error fetching albums: %v", msg.err)
 			m.status = errMsg
