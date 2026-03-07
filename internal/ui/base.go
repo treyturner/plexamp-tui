@@ -35,29 +35,42 @@ func (i item) FilterValue() string    { return string(i.Name) }
 func (i item) GetMetadataKey() string { return i.MetadataKey }
 
 type model struct {
-	playbackList      list.Model
-	artistList        list.Model // Plex artist browse list
-	albumList         list.Model // Plex album browse list
-	playlistList      list.Model // Plex playlist browse list
-	serverList        list.Model // Plex server browse list
-	playerList        list.Model // Plex player browse list
-	selected          string
-	status            string
-	width             int
-	height            int
-	isPlaying         bool
-	lastCommand       string
-	currentTrack      string
-	volume            int
-	durationMs        int
-	positionMs        int
-	lastUpdate        time.Time
-	usingDefaultCfg   bool
-	shuffle           bool // Tracks shuffle state
-	plexAuthenticated bool // Plex authentication status
-	timelineRequestID int
+	playbackList        list.Model
+	artistList          list.Model // Plex artist browse list
+	artistAlbumList     list.Model // Plex artist album browse list
+	albumList           list.Model // Plex album browse list
+	trackList           list.Model // Plex track browse list
+	playlistList        list.Model // Plex playlist browse list
+	serverList          list.Model // Plex server browse list
+	playerList          list.Model // Plex player browse list
+	selected            string
+	status              string
+	width               int
+	height              int
+	isPlaying           bool
+	lastCommand         string
+	currentTrack        string
+	volume              int
+	durationMs          int
+	positionMs          int
+	lastUpdate          time.Time
+	suppressTimeline    bool
+	usingDefaultCfg     bool
+	shuffle             bool // Tracks shuffle state
+	plexAuthenticated   bool // Plex authentication status
+	timelineRequestID   int
+	trackPlaybackReqID  int
+	pendingTrackKey     string
+	currentArtistKey    string
+	currentArtistName   string
+	currentAlbumKey     string
+	currentAlbumName    string
+	currentPlaylistKey  string
+	currentPlaylistName string
+	trackReturnMode     string
 
-	// Panel mode: "servers", "playback", "edit", "plex-servers", "plex-libraries", "plex-artists", "plex-albums"
+	// Panel mode: "servers", "playback", "edit", "plex-servers", "plex-libraries", "plex-artists",
+	// "plex-artist-albums", "plex-albums", "plex-album-tracks", "plex-playlists", "plex-playlist-tracks"
 	panelMode      string
 	playbackConfig *config.Favorites
 	config         *config.Config // Store config for server ID access
@@ -84,6 +97,7 @@ type Timeline struct {
 }
 
 type Track struct {
+	RatingKey        string `xml:"ratingKey,attr"`
 	Title            string `xml:"title,attr"`
 	ParentTitle      string `xml:"parentTitle,attr"`
 	GrandparentTitle string `xml:"grandparentTitle,attr"`
@@ -97,6 +111,7 @@ type (
 
 type trackMsgWithState struct {
 	TrackText string
+	TrackKey  string
 	IsPlaying bool
 	Duration  int
 	Position  int
@@ -180,7 +195,9 @@ func NewUiManager(logger *logger.Logger, config *config.Config, manager *config.
 	m := model{
 		playbackList:      playbackList,
 		artistList:        list.New([]list.Item{}, list.NewDefaultDelegate(), 0, 0),
+		artistAlbumList:   list.New([]list.Item{}, list.NewDefaultDelegate(), 0, 0),
 		albumList:         list.New([]list.Item{}, list.NewDefaultDelegate(), 0, 0),
+		trackList:         list.New([]list.Item{}, list.NewDefaultDelegate(), 0, 0),
 		playlistList:      list.New([]list.Item{}, list.NewDefaultDelegate(), 0, 0),
 		serverList:        list.New([]list.Item{}, list.NewDefaultDelegate(), 0, 0),
 		playerList:        list.New([]list.Item{}, list.NewDefaultDelegate(), 0, 0),
@@ -286,7 +303,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		m.playbackList.SetSize(msg.Width/2-4, availableHeight)
 		m.artistList.SetSize(msg.Width/2-4, availableHeight)
+		m.artistAlbumList.SetSize(msg.Width/2-4, availableHeight)
 		m.albumList.SetSize(msg.Width/2-4, availableHeight)
+		m.trackList.SetSize(msg.Width/2-4, availableHeight)
 		m.playlistList.SetSize(msg.Width/2-4, availableHeight)
 		m.serverList.SetSize(msg.Width/2-4, availableHeight)
 		m.playerList.SetSize(msg.Width/2-4, availableHeight)
@@ -321,6 +340,30 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Call handleAlbumBrowseUpdate which will modify the model directly
 			updatedModel, cmd := modelPtr.handleAlbumBrowseUpdate(msg)
 			// The updated model might be a different instance, so we need to update our local copy
+			if updatedModel != nil {
+				if m2, ok := updatedModel.(model); ok {
+					m = m2
+				}
+			}
+			return m, cmd
+		}
+
+		// Handle artist album browse mode
+		if m.panelMode == "plex-artist-albums" {
+			modelPtr := &m
+			updatedModel, cmd := modelPtr.handleArtistAlbumBrowseUpdate(msg)
+			if updatedModel != nil {
+				if m2, ok := updatedModel.(model); ok {
+					m = m2
+				}
+			}
+			return m, cmd
+		}
+
+		// Handle album/playlist track browse mode
+		if m.panelMode == "plex-album-tracks" || m.panelMode == "plex-playlist-tracks" {
+			modelPtr := &m
+			updatedModel, cmd := modelPtr.handleTrackBrowseUpdate(msg)
 			if updatedModel != nil {
 				if m2, ok := updatedModel.(model); ok {
 					m = m2
@@ -448,6 +491,19 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.RequestID != m.timelineRequestID {
 			return m, nil
 		}
+		if m.suppressTimeline {
+			return m, nil
+		}
+		if m.pendingTrackKey != "" && msg.TrackKey != "" && msg.TrackKey != m.pendingTrackKey {
+			log.Debug(fmt.Sprintf(
+				"Ignoring timeline update for non-requested track key (got=%s, want=%s)",
+				msg.TrackKey, m.pendingTrackKey),
+			)
+			return m, nil
+		}
+		if m.pendingTrackKey != "" && msg.TrackKey == m.pendingTrackKey {
+			m.pendingTrackKey = ""
+		}
 		m.currentTrack = msg.TrackText
 		m.isPlaying = msg.IsPlaying
 		m.durationMs = msg.Duration
@@ -468,6 +524,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.success {
 			m.lastCommand = "Playback Started"
 			m.status = "Playback triggered successfully"
+			return m, m.beginPlaybackRefresh("")
 		} else {
 			m.lastCommand = "Playback Failed"
 			m.status = fmt.Sprintf("Playback error: %v", msg.err)
@@ -500,6 +557,53 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, cmd
 		}
+		return m, nil
+
+	case artistAlbumsFetchedMsg:
+		if m.panelMode == "plex-artist-albums" {
+			modelPtr := &m
+			updatedModel, cmd := modelPtr.handleArtistAlbumBrowseUpdate(msg)
+			if updatedModel != nil {
+				if m2, ok := updatedModel.(model); ok {
+					m = m2
+				}
+			}
+			return m, cmd
+		}
+		return m, nil
+
+	case tracksFetchedMsg:
+		if m.panelMode == "plex-album-tracks" || m.panelMode == "plex-playlist-tracks" {
+			modelPtr := &m
+			updatedModel, cmd := modelPtr.handleTrackBrowseUpdate(msg)
+			if updatedModel != nil {
+				if m2, ok := updatedModel.(model); ok {
+					m = m2
+				}
+			}
+			return m, cmd
+		}
+		return m, nil
+
+	case trackPlaybackMsg:
+		if msg.requestID != m.trackPlaybackReqID {
+			log.Debug(fmt.Sprintf(
+				"Ignoring stale trackPlaybackMsg (requestID=%d, current=%d)",
+				msg.requestID, m.trackPlaybackReqID),
+			)
+			return m, nil
+		}
+
+		if msg.success {
+			m.lastCommand = "Track Playback Started"
+			m.status = "Playback triggered successfully"
+			return m, m.beginPlaybackRefreshForTrack("", msg.ratingKey)
+		}
+
+		m.lastCommand = "Playback Failed"
+		m.status = fmt.Sprintf("Playback error: %v", msg.err)
+		m.suppressTimeline = false
+		m.pendingTrackKey = ""
 		return m, nil
 
 	case playlistsFetchedMsg:
@@ -551,8 +655,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.playbackList, cmd = m.playbackList.Update(msg)
 	} else if m.panelMode == "plex-artists" {
 		m.artistList, cmd = m.artistList.Update(msg)
+	} else if m.panelMode == "plex-artist-albums" {
+		m.artistAlbumList, cmd = m.artistAlbumList.Update(msg)
 	} else if m.panelMode == "plex-albums" {
 		m.albumList, cmd = m.albumList.Update(msg)
+	} else if m.panelMode == "plex-album-tracks" || m.panelMode == "plex-playlist-tracks" {
+		m.trackList, cmd = m.trackList.Update(msg)
 	} else if m.panelMode == "plex-playlists" {
 		m.playlistList, cmd = m.playlistList.Update(msg)
 	} else if m.panelMode == "plex-servers" {
@@ -581,8 +689,12 @@ func (m model) View() string {
 		leftPanelContent = m.playbackList.View()
 	case "plex-artists":
 		leftPanelContent = m.artistList.View()
+	case "plex-artist-albums":
+		leftPanelContent = m.artistAlbumList.View()
 	case "plex-albums":
 		leftPanelContent = m.albumList.View()
+	case "plex-album-tracks", "plex-playlist-tracks":
+		leftPanelContent = m.trackList.View()
 	case "plex-playlists":
 		leftPanelContent = m.playlistList.View()
 	case "plex-servers":
@@ -648,18 +760,42 @@ func (m *model) pollTimeline() tea.Cmd {
 		url := fmt.Sprintf("http://%s:32500/player/timeline/poll?wait=1&includeMetadata=1&commandID=1&type=music", selected)
 		resp, err := http.Get(url)
 		if err != nil {
-			return trackMsgWithState{RequestID: reqID, TrackText: "", IsPlaying: false, Duration: 0, Position: 0, Volume: 0}
+			return trackMsgWithState{
+				RequestID: reqID,
+				TrackText: "",
+				TrackKey:  "",
+				IsPlaying: false,
+				Duration:  0,
+				Position:  0,
+				Volume:    0,
+			}
 		}
 		defer resp.Body.Close()
 
 		data, err := io.ReadAll(resp.Body)
 		if err != nil {
-			return trackMsgWithState{RequestID: reqID, TrackText: "", IsPlaying: false, Duration: 0, Position: 0, Volume: 0}
+			return trackMsgWithState{
+				RequestID: reqID,
+				TrackText: "",
+				TrackKey:  "",
+				IsPlaying: false,
+				Duration:  0,
+				Position:  0,
+				Volume:    0,
+			}
 		}
 
 		var mc MediaContainer
 		if err := xml.Unmarshal(data, &mc); err != nil {
-			return trackMsgWithState{RequestID: reqID, TrackText: "", IsPlaying: false, Duration: 0, Position: 0, Volume: 0}
+			return trackMsgWithState{
+				RequestID: reqID,
+				TrackText: "",
+				TrackKey:  "",
+				IsPlaying: false,
+				Duration:  0,
+				Position:  0,
+				Volume:    0,
+			}
 		}
 
 		var chosen *Timeline
@@ -675,11 +811,13 @@ func (m *model) pollTimeline() tea.Cmd {
 		}
 
 		track := ""
+		trackKey := ""
 		isPlaying := false
 		duration := 0
 		position := 0
 		volume := 0
 		if chosen != nil {
+			trackKey = chosen.Track.RatingKey
 			if chosen.Track.Title != "" {
 				track = fmt.Sprintf("%s - %s (%s)", chosen.Track.GrandparentTitle, chosen.Track.Title, chosen.Track.ParentTitle)
 			}
@@ -691,6 +829,7 @@ func (m *model) pollTimeline() tea.Cmd {
 
 		return trackMsgWithState{
 			TrackText: track,
+			TrackKey:  trackKey,
 			IsPlaying: isPlaying,
 			Duration:  duration,
 			Position:  position,
@@ -703,6 +842,44 @@ func (m *model) pollTimeline() tea.Cmd {
 // =====================
 // Helpers
 // =====================
+
+func (m *model) beginPlaybackRefresh(pendingText string) tea.Cmd {
+	return m.beginPlaybackRefreshForTrack(pendingText, "")
+}
+
+func (m *model) beginPlaybackRefreshForTrack(pendingText, trackKey string) tea.Cmd {
+	if pendingText == "" {
+		pendingText = "Loading..."
+	}
+	// Clear stale state and avoid showing the previous track while we wait for the new timeline.
+	m.currentTrack = pendingText
+	m.isPlaying = true
+	m.durationMs = 0
+	m.positionMs = 0
+	m.lastUpdate = time.Time{}
+	m.suppressTimeline = false
+	m.pendingTrackKey = trackKey
+	m.timelineRequestID++
+	return m.pollTimeline()
+}
+
+func (m *model) beginPlaybackPending(pendingText string) {
+	m.beginPlaybackPendingForTrack(pendingText, "")
+}
+
+func (m *model) beginPlaybackPendingForTrack(pendingText, trackKey string) {
+	if pendingText == "" {
+		pendingText = "Loading..."
+	}
+	m.currentTrack = pendingText
+	m.isPlaying = true
+	m.durationMs = 0
+	m.positionMs = 0
+	m.lastUpdate = time.Time{}
+	m.suppressTimeline = true
+	m.pendingTrackKey = trackKey
+	m.timelineRequestID++
+}
 
 func (m model) currentPosition() int {
 	pos := m.positionMs

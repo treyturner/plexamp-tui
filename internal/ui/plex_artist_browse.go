@@ -148,6 +148,10 @@ func (m *model) initArtistBrowse() {
 				key.WithHelp("f", "Add/Remove from Favorites"),
 			),
 			key.NewBinding(
+				key.WithKeys("P"),
+				key.WithHelp("P", "Play Artist"),
+			),
+			key.NewBinding(
 				key.WithKeys("r"),
 				key.WithHelp("r", "Play Radio"),
 			),
@@ -188,7 +192,16 @@ func (m *model) handleArtistBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 
 		case "enter":
-			// Play selected artist's tracks
+			// View selected artist's albums
+			if selected, ok := m.artistList.SelectedItem().(artistItem); ok {
+				log.Debug(fmt.Sprintf("Viewing artist albums: %s (ratingKey: %s)", selected.title, selected.ratingKey))
+				m.lastCommand = fmt.Sprintf("Viewing %s", selected.title)
+				m.initArtistAlbumBrowse(selected)
+				return m, m.fetchArtistAlbumsCmd(selected.ratingKey)
+			}
+			return m, nil
+
+		case "P":
 			if selected, ok := m.artistList.SelectedItem().(artistItem); ok {
 				log.Debug(fmt.Sprintf("Playing artist: %s (ratingKey: %s)", selected.title, selected.ratingKey))
 				m.lastCommand = fmt.Sprintf("Playing %s", selected.title)
@@ -295,6 +308,7 @@ func (m *model) handleArtistBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.success {
 			m.lastCommand = "Artist Playback Started"
 			m.status = "Playback triggered successfully"
+			return m, m.beginPlaybackRefresh("")
 		} else {
 			m.lastCommand = "Playback Failed"
 			m.status = fmt.Sprintf("Playback error: %v", msg.err)

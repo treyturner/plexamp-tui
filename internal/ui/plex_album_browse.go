@@ -112,6 +112,10 @@ func (m *model) initAlbumBrowse() {
 				key.WithHelp("f", "Add/Remove from Favorites"),
 			),
 			key.NewBinding(
+				key.WithKeys("P"),
+				key.WithHelp("P", "Play Album"),
+			),
+			key.NewBinding(
 				key.WithKeys("R"),
 				key.WithHelp("R", "Refresh Albums"),
 			),
@@ -185,7 +189,17 @@ func (m *model) handleAlbumBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "enter":
-			// Play selected album's tracks
+			// View selected album's tracks
+			if selected, ok := m.albumList.SelectedItem().(albumItem); ok {
+				log.Debug(fmt.Sprintf("Viewing album tracks: %s (ratingKey: %s)", selected.title, selected.ratingKey))
+				m.lastCommand = fmt.Sprintf("Viewing %s", selected.title)
+				m.trackReturnMode = "plex-albums"
+				m.initAlbumTrackBrowse(selected.title, selected.ratingKey)
+				return m, m.fetchAlbumTracksCmd(selected.ratingKey)
+			}
+			return m, nil
+
+		case "P":
 			if selected, ok := m.albumList.SelectedItem().(albumItem); ok {
 				log.Debug(fmt.Sprintf("Playing album: %s (ratingKey: %s)", selected.title, selected.ratingKey))
 				m.lastCommand = fmt.Sprintf("Playing %s", selected.title)
@@ -279,6 +293,7 @@ func (m *model) handleAlbumBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.success {
 			m.lastCommand = "Album Playback Started"
 			m.status = "Playback triggered successfully"
+			return m, m.beginPlaybackRefresh("")
 		} else {
 			m.lastCommand = "Playback Failed"
 			m.status = fmt.Sprintf("Playback error: %v", msg.err)
