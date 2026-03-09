@@ -6,6 +6,7 @@ import (
 	"plexamp-tui/internal/plex"
 
 	"github.com/charmbracelet/bubbles/list"
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 func TestArtistAlbumsFetchedMsgIgnoresStaleResponse(t *testing.T) {
@@ -101,5 +102,42 @@ func TestArtistAlbumsFetchedMsgAppliesMatchingResponse(t *testing.T) {
 	}
 	if updated.status != "Loaded 1 albums" {
 		t.Fatalf("expected success status, got %q", updated.status)
+	}
+}
+
+func TestArtistAlbumBrowseEscReturnsToOriginPanel(t *testing.T) {
+	initTestLogger(t)
+
+	m := model{
+		panelMode:             "plex-artist-albums",
+		artistAlbumReturnMode: "playback",
+		artistAlbumList:       list.New([]list.Item{}, list.NewDefaultDelegate(), 0, 0),
+	}
+
+	updatedModel, cmd := m.handleArtistAlbumBrowseUpdate(tea.KeyMsg{Type: tea.KeyEsc})
+	if cmd != nil {
+		t.Fatalf("expected nil command on escape, got non-nil")
+	}
+
+	updated := updatedModel.(*model)
+	if updated.panelMode != "playback" {
+		t.Fatalf("expected panelMode playback, got %q", updated.panelMode)
+	}
+}
+
+func TestInitArtistAlbumBrowseCapturesCurrentPanelAsReturnMode(t *testing.T) {
+	initTestLogger(t)
+
+	m := model{panelMode: "playback"}
+	m.initArtistAlbumBrowse(artistItem{
+		title:     "Artist A",
+		ratingKey: "artist-a",
+	})
+
+	if m.panelMode != "plex-artist-albums" {
+		t.Fatalf("expected panelMode plex-artist-albums, got %q", m.panelMode)
+	}
+	if m.artistAlbumReturnMode != "playback" {
+		t.Fatalf("expected artistAlbumReturnMode playback, got %q", m.artistAlbumReturnMode)
 	}
 }

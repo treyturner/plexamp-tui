@@ -35,44 +35,45 @@ func (i item) FilterValue() string    { return string(i.Name) }
 func (i item) GetMetadataKey() string { return i.MetadataKey }
 
 type model struct {
-	playbackList        list.Model
-	artistList          list.Model // Plex artist browse list
-	artistAlbumList     list.Model // Plex artist album browse list
-	albumList           list.Model // Plex album browse list
-	trackList           list.Model // Plex track browse list
-	playlistList        list.Model // Plex playlist browse list
-	serverList          list.Model // Plex server browse list
-	playerList          list.Model // Plex player browse list
-	selected            string
-	status              string
-	width               int
-	height              int
-	isPlaying           bool
-	lastCommand         string
-	currentTrack        string
-	currentTrackKey     string
-	volume              int
-	durationMs          int
-	positionMs          int
-	lastUpdate          time.Time
-	suppressTimeline    bool
-	usingDefaultCfg     bool
-	shuffle             bool // Tracks shuffle state
-	plexAuthenticated   bool // Plex authentication status
-	timelineRequestID   int
-	trackPlaybackReqID  int
-	pendingTrackKey     string
-	pendingTrackUntil   time.Time
-	ignoreTrackKey      string
-	ignoreTrackPosMs    int
-	ignoreTrackUntil    time.Time
-	currentArtistKey    string
-	currentArtistName   string
-	currentAlbumKey     string
-	currentAlbumName    string
-	currentPlaylistKey  string
-	currentPlaylistName string
-	trackReturnMode     string
+	playbackList          list.Model
+	artistList            list.Model // Plex artist browse list
+	artistAlbumList       list.Model // Plex artist album browse list
+	albumList             list.Model // Plex album browse list
+	trackList             list.Model // Plex track browse list
+	playlistList          list.Model // Plex playlist browse list
+	serverList            list.Model // Plex server browse list
+	playerList            list.Model // Plex player browse list
+	selected              string
+	status                string
+	width                 int
+	height                int
+	isPlaying             bool
+	lastCommand           string
+	currentTrack          string
+	currentTrackKey       string
+	volume                int
+	durationMs            int
+	positionMs            int
+	lastUpdate            time.Time
+	suppressTimeline      bool
+	usingDefaultCfg       bool
+	shuffle               bool // Tracks shuffle state
+	plexAuthenticated     bool // Plex authentication status
+	timelineRequestID     int
+	trackPlaybackReqID    int
+	pendingTrackKey       string
+	pendingTrackUntil     time.Time
+	ignoreTrackKey        string
+	ignoreTrackPosMs      int
+	ignoreTrackUntil      time.Time
+	currentArtistKey      string
+	currentArtistName     string
+	artistAlbumReturnMode string
+	currentAlbumKey       string
+	currentAlbumName      string
+	currentPlaylistKey    string
+	currentPlaylistName   string
+	trackReturnMode       string
 
 	// Panel mode: "servers", "playback", "edit", "plex-servers", "plex-libraries", "plex-artists",
 	// "plex-artist-albums", "plex-albums", "plex-album-tracks", "plex-playlists", "plex-playlist-tracks"
