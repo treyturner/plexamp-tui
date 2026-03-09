@@ -66,6 +66,7 @@ type PlexTrack struct {
 	Title            string `xml:"title,attr"`
 	ParentTitle      string `xml:"parentTitle,attr"`
 	GrandparentTitle string `xml:"grandparentTitle,attr"`
+	ParentIndex      int    `xml:"parentIndex,attr"`
 	Index            int    `xml:"index,attr"`
 	Duration         int    `xml:"duration,attr"`
 }
@@ -324,8 +325,11 @@ func (p *PlexClient) FetchAlbumTracks(serverAddr, albumRatingKey, token string) 
 		return nil, fmt.Errorf("failed to parse XML: %w", err)
 	}
 
-	sort.Slice(container.Tracks, func(i, j int) bool {
-		return container.Tracks[i].Index < container.Tracks[j].Index
+	sort.SliceStable(container.Tracks, func(i, j int) bool {
+		if container.Tracks[i].ParentIndex == container.Tracks[j].ParentIndex {
+			return container.Tracks[i].Index < container.Tracks[j].Index
+		}
+		return container.Tracks[i].ParentIndex < container.Tracks[j].ParentIndex
 	})
 
 	return container.Tracks, nil
