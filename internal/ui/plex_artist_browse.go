@@ -21,11 +21,6 @@ type artistsFetchedMsg struct {
 	err     error
 }
 
-type artistPlaybackMsg struct {
-	success bool
-	err     error
-}
-
 // =====================
 // Artist Browse Functions
 // =====================
@@ -63,13 +58,13 @@ func (m *model) fetchArtistsCmd() tea.Cmd {
 func (m *model) playArtistCmd(ratingKey string) tea.Cmd {
 	if m.selected == "" {
 		return func() tea.Msg {
-			return artistPlaybackMsg{success: false, err: fmt.Errorf("no server selected")}
+			return playbackTriggeredMsg{success: false, err: fmt.Errorf("no server selected")}
 		}
 	}
 
 	if m.config == nil {
 		return func() tea.Msg {
-			return artistPlaybackMsg{success: false, err: fmt.Errorf("no config available")}
+			return playbackTriggeredMsg{success: false, err: fmt.Errorf("no config available")}
 		}
 	}
 
@@ -80,9 +75,9 @@ func (m *model) playArtistCmd(ratingKey string) tea.Cmd {
 	return func() tea.Msg {
 		err := PlayMetadata(serverIP, serverID, ratingKey, shuffle)
 		if err != nil {
-			return artistPlaybackMsg{success: false, err: err}
+			return playbackTriggeredMsg{success: false, err: err}
 		}
-		return artistPlaybackMsg{success: true}
+		return playbackTriggeredMsg{success: true}
 	}
 }
 
@@ -90,13 +85,13 @@ func (m *model) playArtistCmd(ratingKey string) tea.Cmd {
 func (m *model) playArtistRadioCmd(ratingKey string) tea.Cmd {
 	if m.selected == "" {
 		return func() tea.Msg {
-			return artistPlaybackMsg{success: false, err: fmt.Errorf("no server selected")}
+			return playbackTriggeredMsg{success: false, err: fmt.Errorf("no server selected")}
 		}
 	}
 
 	if m.config == nil {
 		return func() tea.Msg {
-			return artistPlaybackMsg{success: false, err: fmt.Errorf("no config available")}
+			return playbackTriggeredMsg{success: false, err: fmt.Errorf("no config available")}
 		}
 	}
 
@@ -107,9 +102,9 @@ func (m *model) playArtistRadioCmd(ratingKey string) tea.Cmd {
 	return func() tea.Msg {
 		err := PlayArtistRadio(serverIP, serverID, ratingKey, shuffle)
 		if err != nil {
-			return artistPlaybackMsg{success: false, err: err}
+			return playbackTriggeredMsg{success: false, err: err}
 		}
-		return artistPlaybackMsg{success: true}
+		return playbackTriggeredMsg{success: true}
 	}
 }
 
@@ -205,6 +200,7 @@ func (m *model) handleArtistBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if selected, ok := m.artistList.SelectedItem().(artistItem); ok {
 				log.Debug(fmt.Sprintf("Playing artist: %s (ratingKey: %s)", selected.title, selected.ratingKey))
 				m.lastCommand = fmt.Sprintf("Playing %s", selected.title)
+				m.status = fmt.Sprintf("Starting playback for %s...", selected.title)
 				return m, m.playArtistCmd(selected.ratingKey)
 			}
 			return m, nil
@@ -304,17 +300,6 @@ func (m *model) handleArtistBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Force a redraw
 		return m, tea.Batch(tea.ClearScreen, func() tea.Msg { return nil })
 
-	case artistPlaybackMsg:
-		if msg.success {
-			m.lastCommand = "Artist Playback Started"
-			m.status = "Playback triggered successfully"
-			return m, m.beginPlaybackRefresh("")
-		} else {
-			m.lastCommand = "Playback Failed"
-			m.status = fmt.Sprintf("Playback error: %v", msg.err)
-		}
-		// Return the updated model and no command
-		return m, nil
 	}
 
 	// Update the artist list and get the command
