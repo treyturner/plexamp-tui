@@ -221,16 +221,6 @@ func (m *model) handleArtistAlbumBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) 
 		m.status = fmt.Sprintf("Loaded %d albums", len(msg.albums))
 		return m, tea.Batch(tea.ClearScreen, func() tea.Msg { return nil })
 
-	case albumPlaybackMsg:
-		if msg.success {
-			m.lastCommand = "Album Playback Started"
-			m.status = "Playback triggered successfully"
-			return m, m.beginPlaybackRefresh("")
-		} else {
-			m.lastCommand = "Playback Failed"
-			m.status = fmt.Sprintf("Playback error: %v", msg.err)
-		}
-		return m, nil
 	}
 
 	var listCmd tea.Cmd

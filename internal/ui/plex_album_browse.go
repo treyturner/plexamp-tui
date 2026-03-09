@@ -11,11 +11,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-type albumPlaybackMsg struct {
-	success bool
-	err     error
-}
-
 // albumItem represents an album in the list
 type albumItem struct {
 	title     string
@@ -129,13 +124,13 @@ func (m *model) initAlbumBrowse() {
 func (m *model) playAlbumCmd(ratingKey string) tea.Cmd {
 	if m.selected == "" {
 		return func() tea.Msg {
-			return albumPlaybackMsg{success: false, err: fmt.Errorf("no server selected")}
+			return playbackTriggeredMsg{success: false, err: fmt.Errorf("no server selected")}
 		}
 	}
 
 	if m.config == nil {
 		return func() tea.Msg {
-			return albumPlaybackMsg{success: false, err: fmt.Errorf("no config available")}
+			return playbackTriggeredMsg{success: false, err: fmt.Errorf("no config available")}
 		}
 	}
 
@@ -146,9 +141,9 @@ func (m *model) playAlbumCmd(ratingKey string) tea.Cmd {
 	return func() tea.Msg {
 		err := PlayMetadata(serverIP, serverID, ratingKey, shuffle)
 		if err != nil {
-			return albumPlaybackMsg{success: false, err: err}
+			return playbackTriggeredMsg{success: false, err: err}
 		}
-		return albumPlaybackMsg{success: true}
+		return playbackTriggeredMsg{success: true}
 	}
 }
 
@@ -289,17 +284,6 @@ func (m *model) handleAlbumBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Force a redraw
 		return m, tea.Batch(tea.ClearScreen, func() tea.Msg { return nil })
 
-	case albumPlaybackMsg:
-		if msg.success {
-			m.lastCommand = "Album Playback Started"
-			m.status = "Playback triggered successfully"
-			return m, m.beginPlaybackRefresh("")
-		} else {
-			m.lastCommand = "Playback Failed"
-			m.status = fmt.Sprintf("Playback error: %v", msg.err)
-		}
-		// Return the updated model and no command
-		return m, nil
 	}
 
 	// Update the artist list and get the command
