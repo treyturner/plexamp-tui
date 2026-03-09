@@ -39,6 +39,9 @@ func TestPlaybackEnterDrillsDownToArtistAlbums(t *testing.T) {
 	if updated.currentArtistKey != "artist-a" {
 		t.Fatalf("expected currentArtistKey artist-a, got %q", updated.currentArtistKey)
 	}
+	if updated.artistAlbumReturnMode != "playback" {
+		t.Fatalf("expected artistAlbumReturnMode playback, got %q", updated.artistAlbumReturnMode)
+	}
 }
 
 func TestPlaybackEnterDrillsDownToAlbumTracks(t *testing.T) {
