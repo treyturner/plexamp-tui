@@ -54,6 +54,7 @@ func (m *model) fetchArtistAlbumsCmd(artistRatingKey string) tea.Cmd {
 }
 
 func (m *model) initArtistAlbumBrowse(artist artistItem) {
+	m.artistAlbumReturnMode = m.panelMode
 	m.panelMode = "plex-artist-albums"
 	m.status = fmt.Sprintf("Loading albums for %s...", artist.title)
 	m.currentArtistKey = artist.ratingKey
@@ -115,7 +116,11 @@ func (m *model) handleArtistAlbumBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) 
 
 		switch key {
 		case "esc", "q":
-			m.panelMode = "plex-artists"
+			if m.artistAlbumReturnMode != "" {
+				m.panelMode = m.artistAlbumReturnMode
+			} else {
+				m.panelMode = "plex-artists"
+			}
 			m.status = ""
 			return m, nil
 
