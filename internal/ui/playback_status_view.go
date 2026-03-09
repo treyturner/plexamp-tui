@@ -65,6 +65,13 @@ func (m *model) nextTrack() tea.Cmd {
 
 // previousTrack goes to the previous track
 func (m *model) previousTrack() tea.Cmd {
+	// "Previous" acts as restart when we're past the rewind threshold; reset UI immediately
+	// and invalidate any in-flight poll responses captured before this command.
+	m.positionMs = 0
+	m.lastUpdate = time.Now()
+	m.suppressTimeline = false
+	m.timelineRequestID++
+
 	m.sendCommand("playback/skipPrevious")
 	m.lastCommand = "Previous"
 	return m.pollTimeline()
