@@ -11,11 +11,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-type playlistPlaybackMsg struct {
-	success bool
-	err     error
-}
-
 // playlistItem represents a playlist in the list
 type playlistItem struct {
 	title     string
@@ -118,6 +113,10 @@ func (m *model) initPlaylistBrowse() {
 				key.WithHelp("f", "Add/Remove from Favorites"),
 			),
 			key.NewBinding(
+				key.WithKeys("P"),
+				key.WithHelp("P", "Play Playlist"),
+			),
+			key.NewBinding(
 				key.WithKeys("R"),
 				key.WithHelp("R", "Refresh Playlists"),
 			),
@@ -131,13 +130,13 @@ func (m *model) initPlaylistBrowse() {
 func (m *model) playPlaylistCmd(ratingKey string) tea.Cmd {
 	if m.selected == "" {
 		return func() tea.Msg {
-			return playlistPlaybackMsg{success: false, err: fmt.Errorf("no server selected")}
+			return playbackTriggeredMsg{success: false, err: fmt.Errorf("no server selected")}
 		}
 	}
 
 	if m.config == nil {
 		return func() tea.Msg {
-			return playlistPlaybackMsg{success: false, err: fmt.Errorf("no config available")}
+			return playbackTriggeredMsg{success: false, err: fmt.Errorf("no config available")}
 		}
 	}
 
@@ -148,9 +147,9 @@ func (m *model) playPlaylistCmd(ratingKey string) tea.Cmd {
 	return func() tea.Msg {
 		err := PlayPlaylist(serverIP, serverID, ratingKey, shuffle)
 		if err != nil {
-			return playlistPlaybackMsg{success: false, err: err}
+			return playbackTriggeredMsg{success: false, err: err}
 		}
-		return playlistPlaybackMsg{success: true}
+		return playbackTriggeredMsg{success: true}
 	}
 }
 
@@ -176,7 +175,17 @@ func (m *model) handlePlaylistBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 
 		case "enter":
-			// Play selected album's tracks
+			// View selected playlist's tracks
+			if selected, ok := m.playlistList.SelectedItem().(playlistItem); ok {
+				log.Debug(fmt.Sprintf("Viewing playlist tracks: %s (ratingKey: %s)", selected.title, selected.ratingKey))
+				m.lastCommand = fmt.Sprintf("Viewing %s", selected.title)
+				m.trackReturnMode = "plex-playlists"
+				m.initPlaylistTrackBrowse(selected.title, selected.ratingKey)
+				return m, m.fetchPlaylistTracksCmd(selected.ratingKey)
+			}
+			return m, nil
+
+		case "P":
 			if selected, ok := m.playlistList.SelectedItem().(playlistItem); ok {
 				log.Debug(fmt.Sprintf("Playing playlist: %s (ratingKey: %s)", selected.title, selected.ratingKey))
 				m.lastCommand = fmt.Sprintf("Playing %s", selected.title)
@@ -198,7 +207,7 @@ func (m *model) handlePlaylistBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "R":
 			// Refresh album list
-			m.status = "Refreshing albums..."
+			m.status = "Refreshing playlists..."
 			return m, m.fetchPlaylistsCmd()
 
 		default:
@@ -271,16 +280,6 @@ func (m *model) handlePlaylistBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Force a redraw
 		return m, tea.Batch(tea.ClearScreen, func() tea.Msg { return nil })
 
-	case playlistPlaybackMsg:
-		if msg.success {
-			m.lastCommand = "Playlist Playback Started"
-			m.status = "Playback triggered successfully"
-		} else {
-			m.lastCommand = "Playback Failed"
-			m.status = fmt.Sprintf("Playback error: %v", msg.err)
-		}
-		// Return the updated model and no command
-		return m, nil
 	}
 
 	// Update the artist list and get the command
