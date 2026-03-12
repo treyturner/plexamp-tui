@@ -85,6 +85,12 @@ func (m *model) findFavoriteItem(selected item) (config.FavoriteItem, bool) {
 }
 
 func (m *model) openFavoriteItem(item config.FavoriteItem) tea.Cmd {
+	if item.MetadataKey == "" {
+		log.Debug(fmt.Sprintf("Cannot open favorite %s (%s): missing metadata key", item.Name, item.Type))
+		m.status = fmt.Sprintf("Cannot open %s: missing metadata key", item.Name)
+		return nil
+	}
+
 	switch item.Type {
 	case "artist":
 		m.lastCommand = fmt.Sprintf("Viewing %s", item.Name)

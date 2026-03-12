@@ -114,6 +114,54 @@ func TestPlaybackEnterDrillsDownToPlaylistTracks(t *testing.T) {
 	}
 }
 
+func TestPlaybackEnterDoesNotDrillDownWhenFavoriteMetadataKeyMissing(t *testing.T) {
+	initTestLogger(t)
+
+	tests := []struct {
+		name string
+		typ  string
+	}{
+		{name: "artist", typ: "artist"},
+		{name: "album", typ: "album"},
+		{name: "playlist", typ: "playlist"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			displayName := "Legacy " + tt.typ
+			m := model{
+				panelMode: "playback",
+				status:    "existing",
+				playbackList: list.New(
+					[]list.Item{item{Name: displayName, Type: tt.typ, MetadataKey: ""}},
+					list.NewDefaultDelegate(),
+					0,
+					0,
+				),
+				playbackConfig: &config.Favorites{
+					Items: []config.FavoriteItem{
+						{Name: displayName, Type: tt.typ, MetadataKey: ""},
+					},
+				},
+			}
+
+			updatedModel, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+			if cmd != nil {
+				t.Fatalf("expected nil command when metadata key is missing, got non-nil")
+			}
+
+			updated := updatedModel.(model)
+			if updated.panelMode != "playback" {
+				t.Fatalf("expected panelMode playback, got %q", updated.panelMode)
+			}
+			expectedStatus := "Cannot open " + displayName + ": missing metadata key"
+			if updated.status != expectedStatus {
+				t.Fatalf("expected status %q, got %q", expectedStatus, updated.status)
+			}
+		})
+	}
+}
+
 func TestPlaybackPTriggersDirectPlay(t *testing.T) {
 	initTestLogger(t)
 
