@@ -685,6 +685,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		m.lastCommand = "Playback Failed"
 		m.status = fmt.Sprintf("Playback error: %v", msg.err)
+		m.currentTrack = ""
+		m.currentTrackKey = ""
+		m.isPlaying = false
+		m.durationMs = 0
+		m.positionMs = 0
+		m.lastUpdate = time.Time{}
 		m.suppressTimeline = false
 		m.pendingTrackKey = ""
 		m.pendingTrackUntil = time.Time{}
