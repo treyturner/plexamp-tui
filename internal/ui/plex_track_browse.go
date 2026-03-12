@@ -223,6 +223,10 @@ func (m *model) handleTrackBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "enter":
 			if selected, ok := m.trackList.SelectedItem().(trackItem); ok {
+				if selected.ratingKey == "" {
+					log.Debug("Ignoring track playback for item without rating key")
+					return m, nil
+				}
 				log.Debug(fmt.Sprintf("Playing track: %s (ratingKey: %s)", selected.title, selected.ratingKey))
 				m.lastCommand = fmt.Sprintf("Playing %s", selected.title)
 				m.trackPlaybackReqID++
