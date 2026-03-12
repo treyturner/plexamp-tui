@@ -605,6 +605,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case playbackTriggeredMsg:
 		if msg.success {
+			// Invalidate in-flight track playback responses when generic playback starts.
+			m.trackPlaybackReqID++
 			m.lastCommand = "Playback Started"
 			m.status = "Playback triggered successfully"
 			return m, m.beginPlaybackRefresh("")
