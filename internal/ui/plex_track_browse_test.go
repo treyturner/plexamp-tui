@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"errors"
 	"testing"
 	"time"
 
@@ -281,5 +282,60 @@ func TestPlaybackTriggeredDoesNotBlockRestartNearBeginning(t *testing.T) {
 	}
 	if restarted.positionMs != 0 {
 		t.Fatalf("expected position to update to 0, got %d", restarted.positionMs)
+	}
+}
+
+func TestTrackPlaybackMsgFailureClearsPendingNowPlayingState(t *testing.T) {
+	initTestLogger(t)
+
+	m := model{
+		trackPlaybackReqID: 9,
+		currentTrack:       "Loading track...",
+		currentTrackKey:    "old-key",
+		isPlaying:          true,
+		durationMs:         123000,
+		positionMs:         45000,
+		lastUpdate:         time.Now(),
+		suppressTimeline:   true,
+		pendingTrackKey:    "new-key",
+		pendingTrackUntil:  time.Now().Add(8 * time.Second),
+		ignoreTrackKey:     "ignore-key",
+		ignoreTrackPosMs:   30000,
+		ignoreTrackUntil:   time.Now().Add(4 * time.Second),
+	}
+
+	updatedModel, cmd := m.Update(trackPlaybackMsg{
+		success:   false,
+		err:       errors.New("no server selected"),
+		requestID: 9,
+	})
+	if cmd != nil {
+		t.Fatalf("expected nil command for playback failure, got non-nil")
+	}
+
+	updated := updatedModel.(model)
+	if updated.currentTrack != "" {
+		t.Fatalf("expected current track to clear, got %q", updated.currentTrack)
+	}
+	if updated.currentTrackKey != "" {
+		t.Fatalf("expected current track key to clear, got %q", updated.currentTrackKey)
+	}
+	if updated.isPlaying {
+		t.Fatalf("expected playing state to clear")
+	}
+	if updated.durationMs != 0 {
+		t.Fatalf("expected duration to reset, got %d", updated.durationMs)
+	}
+	if updated.positionMs != 0 {
+		t.Fatalf("expected position to reset, got %d", updated.positionMs)
+	}
+	if !updated.lastUpdate.IsZero() {
+		t.Fatalf("expected lastUpdate to reset, got %v", updated.lastUpdate)
+	}
+	if updated.pendingTrackKey != "" {
+		t.Fatalf("expected pending track key to clear, got %q", updated.pendingTrackKey)
+	}
+	if updated.suppressTimeline {
+		t.Fatalf("expected timeline suppression to clear")
 	}
 }
