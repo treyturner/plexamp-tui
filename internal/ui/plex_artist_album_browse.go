@@ -152,6 +152,10 @@ func (m *model) handleArtistAlbumBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) 
 
 		case "f":
 			if selected, ok := m.artistAlbumList.SelectedItem().(albumItem); ok {
+				if selected.ratingKey == "" {
+					log.Debug("Ignoring album favorite toggle for item without rating key")
+					return m, nil
+				}
 				log.Debug(fmt.Sprintf("Toggling favorite for album: %s (ratingKey: %s)", selected.title, selected.ratingKey))
 				m.lastCommand = fmt.Sprintf("Toggling favorite for %s", selected.title)
 
