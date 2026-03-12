@@ -141,3 +141,29 @@ func TestInitArtistAlbumBrowseCapturesCurrentPanelAsReturnMode(t *testing.T) {
 		t.Fatalf("expected artistAlbumReturnMode playback, got %q", m.artistAlbumReturnMode)
 	}
 }
+
+func TestArtistAlbumBrowseEnterIgnoresItemWithoutRatingKey(t *testing.T) {
+	initTestLogger(t)
+
+	m := model{
+		panelMode:       "plex-artist-albums",
+		status:          "Loading albums for Artist A...",
+		artistAlbumList: list.New([]list.Item{albumItem{title: "Loading albums..."}}, list.NewDefaultDelegate(), 0, 0),
+	}
+
+	updatedModel, cmd := m.handleArtistAlbumBrowseUpdate(tea.KeyMsg{Type: tea.KeyEnter})
+	if cmd != nil {
+		t.Fatalf("expected nil command when selected album has no rating key, got non-nil")
+	}
+
+	updated := updatedModel.(*model)
+	if updated.panelMode != "plex-artist-albums" {
+		t.Fatalf("expected panelMode to stay on artist albums, got %q", updated.panelMode)
+	}
+	if updated.trackReturnMode != "" {
+		t.Fatalf("expected trackReturnMode to remain unchanged, got %q", updated.trackReturnMode)
+	}
+	if updated.currentAlbumKey != "" {
+		t.Fatalf("expected currentAlbumKey to remain unset, got %q", updated.currentAlbumKey)
+	}
+}
