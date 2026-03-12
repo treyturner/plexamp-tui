@@ -140,6 +140,10 @@ func (m *model) handleArtistAlbumBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) 
 
 		case "P":
 			if selected, ok := m.artistAlbumList.SelectedItem().(albumItem); ok {
+				if selected.ratingKey == "" {
+					log.Debug("Ignoring album playback for item without rating key")
+					return m, nil
+				}
 				log.Debug(fmt.Sprintf("Playing album: %s (ratingKey: %s)", selected.title, selected.ratingKey))
 				m.lastCommand = fmt.Sprintf("Playing %s", selected.title)
 				return m, m.playAlbumCmd(selected.ratingKey)

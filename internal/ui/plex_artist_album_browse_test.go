@@ -167,3 +167,27 @@ func TestArtistAlbumBrowseEnterIgnoresItemWithoutRatingKey(t *testing.T) {
 		t.Fatalf("expected currentAlbumKey to remain unset, got %q", updated.currentAlbumKey)
 	}
 }
+
+func TestArtistAlbumBrowsePlayIgnoresItemWithoutRatingKey(t *testing.T) {
+	initTestLogger(t)
+
+	m := model{
+		panelMode:       "plex-artist-albums",
+		status:          "Loading albums for Artist A...",
+		lastCommand:     "existing",
+		artistAlbumList: list.New([]list.Item{albumItem{title: "Loading albums..."}}, list.NewDefaultDelegate(), 0, 0),
+	}
+
+	updatedModel, cmd := m.handleArtistAlbumBrowseUpdate(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'P'}})
+	if cmd != nil {
+		t.Fatalf("expected nil command when selected album has no rating key, got non-nil")
+	}
+
+	updated := updatedModel.(*model)
+	if updated.panelMode != "plex-artist-albums" {
+		t.Fatalf("expected panelMode to stay on artist albums, got %q", updated.panelMode)
+	}
+	if updated.lastCommand != "existing" {
+		t.Fatalf("expected lastCommand to remain unchanged, got %q", updated.lastCommand)
+	}
+}
