@@ -6,6 +6,9 @@ import (
 	"time"
 
 	"plexamp-tui/internal/logger"
+
+	"github.com/charmbracelet/bubbles/list"
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 func initTestLogger(t *testing.T) {
@@ -46,6 +49,34 @@ func TestTrackPlaybackMsgIgnoresStaleResponse(t *testing.T) {
 	}
 	if updated.status != "existing" {
 		t.Fatalf("expected status to remain unchanged, got %q", updated.status)
+	}
+}
+
+func TestTrackBrowseEnterIgnoresItemWithoutRatingKey(t *testing.T) {
+	initTestLogger(t)
+
+	m := model{
+		panelMode:          "plex-album-tracks",
+		status:             "Loading tracks for Album A...",
+		currentTrack:       "Existing Track",
+		trackPlaybackReqID: 4,
+		trackList:          list.New([]list.Item{trackItem{title: "Loading tracks..."}}, list.NewDefaultDelegate(), 0, 0),
+	}
+
+	updatedModel, cmd := m.handleTrackBrowseUpdate(tea.KeyMsg{Type: tea.KeyEnter})
+	if cmd != nil {
+		t.Fatalf("expected nil command when selected track has no rating key, got non-nil")
+	}
+
+	updated := updatedModel.(*model)
+	if updated.trackPlaybackReqID != 4 {
+		t.Fatalf("expected trackPlaybackReqID to remain unchanged, got %d", updated.trackPlaybackReqID)
+	}
+	if updated.currentTrack != "Existing Track" {
+		t.Fatalf("expected current track to remain unchanged, got %q", updated.currentTrack)
+	}
+	if updated.pendingTrackKey != "" {
+		t.Fatalf("expected pending track key to remain empty, got %q", updated.pendingTrackKey)
 	}
 }
 
