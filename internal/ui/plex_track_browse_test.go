@@ -316,6 +316,49 @@ func TestPlaybackTriggeredDoesNotBlockRestartNearBeginning(t *testing.T) {
 	}
 }
 
+func TestPlaybackTriggeredInvalidatesPendingTrackPlaybackResponses(t *testing.T) {
+	initTestLogger(t)
+
+	m := model{
+		timelineRequestID:  12,
+		trackPlaybackReqID: 4,
+		currentTrack:       "Artist - Old Track (Album)",
+		currentTrackKey:    "old-key",
+		positionMs:         10000,
+		lastUpdate:         time.Now(),
+	}
+
+	updatedModel, cmd := m.Update(playbackTriggeredMsg{success: true})
+	if cmd != nil {
+		t.Fatalf("expected nil command when no player is selected, got non-nil")
+	}
+
+	updated := updatedModel.(model)
+	if updated.trackPlaybackReqID != 5 {
+		t.Fatalf("expected trackPlaybackReqID to increment, got %d", updated.trackPlaybackReqID)
+	}
+	if updated.lastCommand != "Playback Started" {
+		t.Fatalf("expected playback-triggered command marker, got %q", updated.lastCommand)
+	}
+
+	staleModel, staleCmd := updated.Update(trackPlaybackMsg{
+		success:   true,
+		requestID: 4,
+		ratingKey: "stale-track-key",
+	})
+	if staleCmd != nil {
+		t.Fatalf("expected nil command for stale track playback response, got non-nil")
+	}
+
+	stale := staleModel.(model)
+	if stale.lastCommand != "Playback Started" {
+		t.Fatalf("expected stale response to be ignored, got lastCommand=%q", stale.lastCommand)
+	}
+	if stale.pendingTrackKey != "" {
+		t.Fatalf("expected pendingTrackKey to stay empty, got %q", stale.pendingTrackKey)
+	}
+}
+
 func TestTrackPlaybackMsgFailureClearsPendingNowPlayingState(t *testing.T) {
 	initTestLogger(t)
 
