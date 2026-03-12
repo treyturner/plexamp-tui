@@ -208,6 +208,10 @@ func (m *model) handleArtistBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "f":
 			// add or remove selected artist from favorites (playback list)
 			if selected, ok := m.artistList.SelectedItem().(artistItem); ok {
+				if selected.ratingKey == "" {
+					log.Debug("Ignoring artist favorite toggle for item without rating key")
+					return m, nil
+				}
 				log.Debug(fmt.Sprintf("Toggling favorite for artist: %s (ratingKey: %s)", selected.title, selected.ratingKey))
 				m.lastCommand = fmt.Sprintf("Toggling favorite for %s", selected.title)
 				_, cmd := m.addRemoveFavorite(selected.title, selected.ratingKey, "artist")
