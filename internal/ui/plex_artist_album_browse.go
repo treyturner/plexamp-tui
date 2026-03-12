@@ -126,6 +126,10 @@ func (m *model) handleArtistAlbumBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) 
 
 		case "enter":
 			if selected, ok := m.artistAlbumList.SelectedItem().(albumItem); ok {
+				if selected.ratingKey == "" {
+					log.Debug("Ignoring album track browse for item without rating key")
+					return m, nil
+				}
 				log.Debug(fmt.Sprintf("Opening album tracks: %s (ratingKey: %s)", selected.title, selected.ratingKey))
 				m.lastCommand = fmt.Sprintf("Viewing %s", selected.title)
 				m.trackReturnMode = "plex-artist-albums"
