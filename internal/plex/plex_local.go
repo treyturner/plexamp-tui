@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"plexamp-tui/internal/config"
 	"sort"
+	"strings"
 )
 
 // =====================
@@ -76,10 +77,20 @@ type PlexPlaylistContainer struct {
 // Library Fetching
 // =====================
 
+func buildPlexURL(serverAddr, path string) string {
+	addrLower := strings.ToLower(serverAddr)
+	if strings.HasPrefix(addrLower, "http://") || strings.HasPrefix(addrLower, "https://") {
+		return fmt.Sprintf("%s%s", strings.TrimRight(serverAddr, "/"), path)
+	}
+	return fmt.Sprintf("http://%s%s", serverAddr, path)
+}
+
 // FetchArtists retrieves all artists from the Plex library
 func (p *PlexClient) FetchArtists(serverAddr, libraryID, token string) ([]PlexArtist, error) {
-	urlStr := fmt.Sprintf("http://%s/library/sections/%s/all?type=8&X-Plex-Token=%s",
-		serverAddr, libraryID, url.QueryEscape(token))
+	urlStr := buildPlexURL(
+		serverAddr,
+		fmt.Sprintf("/library/sections/%s/all?type=8&X-Plex-Token=%s", libraryID, url.QueryEscape(token)),
+	)
 
 	p.logger.Debug(fmt.Sprintf("Fetching artists from: %s", urlStr))
 
@@ -129,8 +140,10 @@ func (p *PlexClient) FetchArtists(serverAddr, libraryID, token string) ([]PlexAr
 
 // FetchAlbums retrieves all albums from the Plex library
 func (p *PlexClient) FetchAlbums(serverAddr, libraryID, token string) ([]PlexAlbum, error) {
-	urlStr := fmt.Sprintf("http://%s/library/sections/%s/all?type=9&X-Plex-Token=%s",
-		serverAddr, libraryID, url.QueryEscape(token))
+	urlStr := buildPlexURL(
+		serverAddr,
+		fmt.Sprintf("/library/sections/%s/all?type=9&X-Plex-Token=%s", libraryID, url.QueryEscape(token)),
+	)
 
 	p.logger.Debug(fmt.Sprintf("Fetching albums from: %s", urlStr))
 
@@ -182,8 +195,10 @@ func (p *PlexClient) FetchAlbums(serverAddr, libraryID, token string) ([]PlexAlb
 
 // FetchArtistAlbums retrieves albums for a specific artist
 func (p *PlexClient) FetchArtistAlbums(serverAddr, artistRatingKey, token string) ([]PlexAlbum, error) {
-	urlStr := fmt.Sprintf("http://%s/library/metadata/%s/children?X-Plex-Token=%s",
-		serverAddr, artistRatingKey, url.QueryEscape(token))
+	urlStr := buildPlexURL(
+		serverAddr,
+		fmt.Sprintf("/library/metadata/%s/children?X-Plex-Token=%s", artistRatingKey, url.QueryEscape(token)),
+	)
 
 	p.logger.Debug(fmt.Sprintf("Fetching albums for artist %s from: %s", artistRatingKey, urlStr))
 
@@ -211,7 +226,10 @@ func (p *PlexClient) FetchArtistAlbums(serverAddr, artistRatingKey, token string
 }
 
 func (p *PlexClient) FetchPlaylists(serverAddr, token string) ([]PlexPlaylist, error) {
-	urlStr := fmt.Sprintf("http://%s/playlists?X-Plex-Token=%s", serverAddr, url.QueryEscape(token))
+	urlStr := buildPlexURL(
+		serverAddr,
+		fmt.Sprintf("/playlists?X-Plex-Token=%s", url.QueryEscape(token)),
+	)
 
 	p.logger.Debug(fmt.Sprintf("Fetching playlists from: %s", urlStr))
 
@@ -240,7 +258,10 @@ func (p *PlexClient) FetchPlaylists(serverAddr, token string) ([]PlexPlaylist, e
 
 func (p *PlexClient) FetchLibrary(serverAddr string) ([]config.PlexLibrary, error) {
 	token := p.GetPlexToken()
-	urlStr := fmt.Sprintf("http://%s/library/sections?X-Plex-Token=%s", serverAddr, url.QueryEscape(token))
+	urlStr := buildPlexURL(
+		serverAddr,
+		fmt.Sprintf("/library/sections?X-Plex-Token=%s", url.QueryEscape(token)),
+	)
 
 	p.logger.Debug(fmt.Sprintf("Fetching library from: %s", urlStr))
 

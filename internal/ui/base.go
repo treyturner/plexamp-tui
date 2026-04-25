@@ -237,7 +237,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if msg.success {
 			m.config.ServerID = msg.server.clientIdentifier
-			m.config.PlexServerAddr = msg.server.address + ":" + msg.server.port
+			serverAddr := msg.server.address + ":" + msg.server.port
+			if msg.server.scheme != "" {
+				serverAddr = msg.server.scheme + "://" + serverAddr
+			}
+			m.config.PlexServerAddr = serverAddr
 			m.config.PlexServerName = msg.server.title
 			m.config.PlexLibraries = msg.libraries
 

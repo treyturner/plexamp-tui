@@ -51,6 +51,7 @@ type PlexDeviceContainer struct {
 type PlexConnectionSelection struct {
 	Name             string `xml:"name,attr"`
 	ClientIdentifier string `xml:"clientIdentifier,attr"`
+	Scheme           string `xml:"scheme,attr"`
 	Address          string `xml:"address,attr"`
 	Local            string `xml:"local,attr"`
 	Port             string `xml:"port,attr"`
@@ -93,6 +94,7 @@ func (p *PlexClient) GetPlexServerInformation() ([]PlexConnectionSelection, erro
 			serverConnection := PlexConnectionSelection{
 				Name:             device.Name,
 				ClientIdentifier: device.ClientIdentifier,
+				Scheme:           connection.Protocol,
 				Address:          connection.Address,
 				Local:            connection.Local,
 				Port:             connection.Port,
@@ -141,6 +143,7 @@ func (p *PlexClient) GetPlexPlayers() ([]PlexConnectionSelection, error) {
 			serverConnection := PlexConnectionSelection{
 				Name:             device.Name,
 				ClientIdentifier: device.ClientIdentifier,
+				Scheme:           connection.Protocol,
 				Address:          connection.Address,
 				Local:            connection.Local,
 				Port:             connection.Port,
