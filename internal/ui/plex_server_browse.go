@@ -47,7 +47,7 @@ func (i serverItem) FilterValue() string {
 
 // fetchServersCmd fetches servers from the Plex server
 func (m *model) fetchServersCmd() tea.Cmd {
-	log.Debug("Fetching servers...")
+	m.debug("Fetching servers...")
 	// ✅ Reapply sizing
 	footerHeight := 3 // or dynamically measure your footer
 	availableHeight := m.height - footerHeight - 5
@@ -58,7 +58,7 @@ func (m *model) fetchServersCmd() tea.Cmd {
 		}
 	}
 
-	token := plexClient.GetPlexToken()
+	token := m.deps.plexClient.GetPlexToken()
 	if token == "" {
 		return func() tea.Msg {
 			return serversFetchedMsg{err: fmt.Errorf("no Plex token found - run with --auth flag")}
@@ -66,7 +66,7 @@ func (m *model) fetchServersCmd() tea.Cmd {
 	}
 
 	return func() tea.Msg {
-		servers, err := plexClient.GetPlexServerInformation()
+		servers, err := m.deps.plexClient.GetPlexServerInformation()
 		return serversFetchedMsg{servers: servers, err: err}
 	}
 }
@@ -113,11 +113,11 @@ func (m *model) selectServerCmd(server serverItem) tea.Cmd {
 		if server.scheme != "" {
 			serverAddr = fmt.Sprintf("%s://%s", server.scheme, serverAddr)
 		}
-		libraries, err := plexClient.FetchLibrary(serverAddr)
-		log.Debug("Fetched libraries: %v", libraries)
+		libraries, err := m.deps.plexClient.FetchLibrary(serverAddr)
+		m.debug("Fetched libraries: %v", libraries)
 
 		if err != nil {
-			log.Debug("Error fetching libraries: %v", err)
+			m.debug("Error fetching libraries: %v", err)
 		}
 
 		// When a server is selected we will write the serverId and serverAddress:port to the config file and save it to disk
@@ -129,7 +129,7 @@ func (m *model) selectServerCmd(server serverItem) tea.Cmd {
 }
 
 func (m *model) handleServerBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
-	log.Debug("handleServerBrowseUpdate received message: %T", msg)
+	m.debug("handleServerBrowseUpdate received message: %T", msg)
 
 	// If we're in filtering mode, let the list handle the input
 	if m.serverList.FilterState() == list.Filtering {
@@ -152,7 +152,7 @@ func (m *model) handleServerBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "enter":
 			// Select Server
 			if selected, ok := m.serverList.SelectedItem().(serverItem); ok {
-				log.Debug("Selecting server: %s (clientIdentifier: %s)", selected.title, selected.clientIdentifier)
+				m.debug("Selecting server: %s (clientIdentifier: %s)", selected.title, selected.clientIdentifier)
 				m.lastCommand = fmt.Sprintf("Selecting %s", selected.title)
 				return m, m.selectServerCmd(selected)
 			}
@@ -172,11 +172,11 @@ func (m *model) handleServerBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case serversFetchedMsg:
-		log.Debug("serversFetchedMsg received with %d servers, error: %v", len(msg.servers), msg.err)
+		m.debug("serversFetchedMsg received with %d servers, error: %v", len(msg.servers), msg.err)
 		if msg.err != nil {
 			errMsg := fmt.Sprintf("Error fetching servers: %v", msg.err)
 			m.status = errMsg
-			log.Debug("%s", errMsg)
+			m.debug("%s", errMsg)
 			return m, nil
 		}
 
@@ -184,7 +184,7 @@ func (m *model) handleServerBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var items []list.Item
 		for i, server := range msg.servers {
 			if i < 5 { // Only log first 5 servers to avoid log spam
-				log.Debug("Adding server %d: %s (ratingKey: %s)", i+1, server.Name, server.ClientIdentifier)
+				m.debug("Adding server %d: %s (ratingKey: %s)", i+1, server.Name, server.ClientIdentifier)
 			}
 			items = append(items, serverItem{
 				title:            server.Name,
@@ -196,7 +196,7 @@ func (m *model) handleServerBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 			})
 		}
 
-		log.Debug("Creating new list with %d items", len(items))
+		m.debug("Creating new list with %d items", len(items))
 		// Create a new list with the fetched items
 		// Preserve the current filter state
 		filterState := m.serverList.FilterState()
@@ -216,7 +216,7 @@ func (m *model) handleServerBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.serverList.FilterInput.SetValue(filterValue)
 		}
 		m.status = fmt.Sprintf("Loaded %d servers", len(msg.servers))
-		log.Debug("Updated model with new server list. List has %d items", m.serverList.VisibleItems())
+		m.debug("Updated model with new server list. List has %d items", m.serverList.VisibleItems())
 
 		// Force a redraw
 		return m, tea.Batch(tea.ClearScreen, func() tea.Msg { return nil })

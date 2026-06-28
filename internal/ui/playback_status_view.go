@@ -122,7 +122,7 @@ func (m *model) cycleLibrary() tea.Cmd {
 				m.config.PlexLibraryID = m.config.PlexLibraries[i+1].Key
 				m.config.PlexLibraryName = m.config.PlexLibraries[i+1].Title
 			}
-			if err := cfgManager.Save(m.config); err != nil {
+			if err := m.deps.cfgManager.Save(m.config); err != nil {
 				m.status = "Error saving library selection: " + err.Error()
 				m.lastCommand = "Library Selection Save Failed"
 				return nil

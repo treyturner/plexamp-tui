@@ -74,7 +74,7 @@ func ApplyShuffle(urlStr string, shuffle bool) (string, error) {
 
 // SendPlaybackURL sends a playback URL to the local Plexamp server
 // It takes the full listen.plex.tv URL and converts it to a local server request
-func SendPlaybackURL(serverIP, fullURL string, shuffle bool) error {
+func SendPlaybackURL(serverIP, fullURL string, shuffle bool, deps uiDeps) error {
 	// Apply shuffle if needed
 	modifiedURL := fullURL
 	if shuffleURL, err := ApplyShuffle(fullURL, shuffle); err == nil {
@@ -85,16 +85,16 @@ func SendPlaybackURL(serverIP, fullURL string, shuffle bool) error {
 	localURL := strings.Replace(modifiedURL, "https://listen.plex.tv", fmt.Sprintf("http://%s:32500", serverIP), 1)
 	localURL = strings.Replace(localURL, "http://listen.plex.tv", fmt.Sprintf("http://%s:32500", serverIP), 1)
 
-	log.Debug("Sending playback URL: %s", localURL)
+	deps.debug("Sending playback URL: %s", localURL)
 
 	resp, err := http.Get(localURL)
 	if err != nil {
-		log.Debug("Request error: %v", err)
+		deps.debug("Request error: %v", err)
 		return fmt.Errorf("failed to connect to %s: %w", serverIP, err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	log.Debug("Response status: %d", resp.StatusCode)
+	deps.debug("Response status: %d", resp.StatusCode)
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
 		return fmt.Errorf("server returned status %d", resp.StatusCode)
@@ -105,27 +105,27 @@ func SendPlaybackURL(serverIP, fullURL string, shuffle bool) error {
 
 // PlayMetadata plays a specific metadata item (track, album, artist, etc.)
 // This is a convenience function that builds the URL and sends it
-func PlayMetadata(serverIP, serverID, metadataID string, shuffle bool) error {
+func PlayMetadata(serverIP, serverID, metadataID string, shuffle bool, deps uiDeps) error {
 	builder := NewPlaybackURLBuilder(serverID)
 	playbackURL := builder.BuildPlayQueueURL(metadataID)
-	return SendPlaybackURL(serverIP, playbackURL, shuffle)
+	return SendPlaybackURL(serverIP, playbackURL, shuffle, deps)
 }
 
 // PlayArtistRadio plays an artist radio station
 // This is a convenience function that builds the URL and sends it
 // It generates a new UUID for each call to ensure a fresh radio station
-func PlayArtistRadio(serverIP, serverID, metadataID string, shuffle bool) error {
+func PlayArtistRadio(serverIP, serverID, metadataID string, shuffle bool, deps uiDeps) error {
 	// Generate a new UUID for the station
 	stationUUID := uuid.New().String()
 	builder := NewPlaybackURLBuilder(serverID)
 	playbackURL := builder.BuildArtistRadioURL(metadataID, stationUUID)
-	return SendPlaybackURL(serverIP, playbackURL, shuffle)
+	return SendPlaybackURL(serverIP, playbackURL, shuffle, deps)
 }
 
 // PlayPlaylist plays a specific playlist
 // This is a convenience function that builds the URL and sends it
-func PlayPlaylist(serverIP, serverID, metadataID string, shuffle bool) error {
+func PlayPlaylist(serverIP, serverID, metadataID string, shuffle bool, deps uiDeps) error {
 	builder := NewPlaybackURLBuilder(serverID)
 	playbackURL := builder.BuildPlaylistURL(metadataID)
-	return SendPlaybackURL(serverIP, playbackURL, shuffle)
+	return SendPlaybackURL(serverIP, playbackURL, shuffle, deps)
 }

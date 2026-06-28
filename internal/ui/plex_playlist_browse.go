@@ -52,7 +52,7 @@ func (p *playlistItem) ToggleFavorite() {
 
 // fetchPlaylistsCmd fetches playlists from the Plex server
 func (m *model) fetchPlaylistsCmd() tea.Cmd {
-	log.Debug("Fetching playlists...")
+	m.debug("Fetching playlists...")
 	// ✅ Reapply sizing
 	footerHeight := 3 // or dynamically measure your footer
 	availableHeight := m.height - footerHeight - 5
@@ -63,7 +63,7 @@ func (m *model) fetchPlaylistsCmd() tea.Cmd {
 		}
 	}
 
-	token := plexClient.GetPlexToken()
+	token := m.deps.plexClient.GetPlexToken()
 	if token == "" {
 		return func() tea.Msg {
 			return playlistsFetchedMsg{err: fmt.Errorf("no Plex token found - run with --auth flag")}
@@ -73,7 +73,7 @@ func (m *model) fetchPlaylistsCmd() tea.Cmd {
 	serverAddr := m.config.PlexServerAddr
 
 	return func() tea.Msg {
-		playlists, err := plexClient.FetchPlaylists(serverAddr, token)
+		playlists, err := m.deps.plexClient.FetchPlaylists(serverAddr, token)
 		return playlistsFetchedMsg{playlists: playlists, err: err}
 	}
 }
@@ -143,9 +143,10 @@ func (m *model) playPlaylistCmd(ratingKey string) tea.Cmd {
 	serverIP := m.selected
 	serverID := m.config.ServerID
 	shuffle := m.shuffle
+	deps := m.deps
 
 	return func() tea.Msg {
-		err := PlayPlaylist(serverIP, serverID, ratingKey, shuffle)
+		err := PlayPlaylist(serverIP, serverID, ratingKey, shuffle, deps)
 		if err != nil {
 			return playbackTriggeredMsg{success: false, err: err}
 		}
@@ -154,7 +155,7 @@ func (m *model) playPlaylistCmd(ratingKey string) tea.Cmd {
 }
 
 func (m *model) handlePlaylistBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
-	log.Debug("handlePlaylistBrowseUpdate received message: %T", msg)
+	m.debug("handlePlaylistBrowseUpdate received message: %T", msg)
 
 	// If we're in filtering mode, let the list handle the input
 	if m.playlistList.FilterState() == list.Filtering {
@@ -177,7 +178,7 @@ func (m *model) handlePlaylistBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "enter":
 			// View selected playlist's tracks
 			if selected, ok := m.playlistList.SelectedItem().(playlistItem); ok {
-				log.Debug("Viewing playlist tracks: %s (ratingKey: %s)", selected.title, selected.ratingKey)
+				m.debug("Viewing playlist tracks: %s (ratingKey: %s)", selected.title, selected.ratingKey)
 				m.lastCommand = fmt.Sprintf("Viewing %s", selected.title)
 				m.trackReturnMode = "plex-playlists"
 				m.initPlaylistTrackBrowse(selected.title, selected.ratingKey)
@@ -187,7 +188,7 @@ func (m *model) handlePlaylistBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "P":
 			if selected, ok := m.playlistList.SelectedItem().(playlistItem); ok {
-				log.Debug("Playing playlist: %s (ratingKey: %s)", selected.title, selected.ratingKey)
+				m.debug("Playing playlist: %s (ratingKey: %s)", selected.title, selected.ratingKey)
 				m.lastCommand = fmt.Sprintf("Playing %s", selected.title)
 				return m, m.playPlaylistCmd(selected.ratingKey)
 			}
@@ -197,10 +198,10 @@ func (m *model) handlePlaylistBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// add or remove selected artist from favorites (playback list)
 			if selected, ok := m.playlistList.SelectedItem().(playlistItem); ok {
 				if selected.ratingKey == "" {
-					log.Debug("Ignoring playlist favorite toggle for item without rating key")
+					m.debug("Ignoring playlist favorite toggle for item without rating key")
 					return m, nil
 				}
-				log.Debug("Toggling favorite for playlist: %s (ratingKey: %s)", selected.title, selected.ratingKey)
+				m.debug("Toggling favorite for playlist: %s (ratingKey: %s)", selected.title, selected.ratingKey)
 				m.lastCommand = fmt.Sprintf("Toggling favorite for %s", selected.title)
 				_, cmd := m.addRemoveFavorite(selected.title, selected.ratingKey, "playlist")
 				selected.ToggleFavorite()
@@ -223,11 +224,11 @@ func (m *model) handlePlaylistBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case playlistsFetchedMsg:
-		log.Debug("playlistsFetchedMsg received with %d playlists, error: %v", len(msg.playlists), msg.err)
+		m.debug("playlistsFetchedMsg received with %d playlists, error: %v", len(msg.playlists), msg.err)
 		if msg.err != nil {
 			errMsg := fmt.Sprintf("Error fetching playlists: %v", msg.err)
 			m.status = errMsg
-			log.Debug("%s", errMsg)
+			m.debug("%s", errMsg)
 			return m, nil
 		}
 
@@ -241,7 +242,7 @@ func (m *model) handlePlaylistBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var items []list.Item
 		for i, playlist := range msg.playlists {
 			if i < 5 { // Only log first 5 playlists to avoid log spam
-				log.Debug("Adding playlist %d: %s (ratingKey: %s)", i+1, playlist.Title, playlist.RatingKey)
+				m.debug("Adding playlist %d: %s (ratingKey: %s)", i+1, playlist.Title, playlist.RatingKey)
 			}
 
 			fav := false
@@ -259,7 +260,7 @@ func (m *model) handlePlaylistBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 			})
 		}
 
-		log.Debug("Creating new list with %d items", len(items))
+		m.debug("Creating new list with %d items", len(items))
 		// Create a new list with the fetched items
 		// Preserve the current filter state
 		filterState := m.playlistList.FilterState()
@@ -279,7 +280,7 @@ func (m *model) handlePlaylistBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.playlistList.FilterInput.SetValue(filterValue)
 		}
 		m.status = fmt.Sprintf("Loaded %d playlists", len(msg.playlists))
-		log.Debug("Updated model with new playlist list. List has %d items", m.playlistList.VisibleItems())
+		m.debug("Updated model with new playlist list. List has %d items", m.playlistList.VisibleItems())
 
 		// Force a redraw
 		return m, tea.Batch(tea.ClearScreen, func() tea.Msg { return nil })

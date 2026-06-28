@@ -44,7 +44,7 @@ func (i playerItem) FilterValue() string {
 
 // fetchPlayersCmd fetches players from the Plex server
 func (m *model) fetchPlayersCmd() tea.Cmd {
-	log.Debug("Fetching players...")
+	m.debug("Fetching players...")
 	// ✅ Reapply sizing
 	footerHeight := 3 // or dynamically measure your footer
 	availableHeight := m.height - footerHeight - 5
@@ -55,7 +55,7 @@ func (m *model) fetchPlayersCmd() tea.Cmd {
 		}
 	}
 
-	token := plexClient.GetPlexToken()
+	token := m.deps.plexClient.GetPlexToken()
 	if token == "" {
 		return func() tea.Msg {
 			return playersFetchedMsg{err: fmt.Errorf("no Plex token found - run with --auth flag")}
@@ -63,7 +63,7 @@ func (m *model) fetchPlayersCmd() tea.Cmd {
 	}
 
 	return func() tea.Msg {
-		players, err := plexClient.GetPlexPlayers()
+		players, err := m.deps.plexClient.GetPlexPlayers()
 		return playersFetchedMsg{players: players, err: err}
 	}
 }
@@ -108,7 +108,7 @@ func (m *model) selectPlayerCmd(player playerItem) tea.Cmd {
 }
 
 func (m *model) handlePlayerBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
-	log.Debug("handlePlayerBrowseUpdate received message: %T", msg)
+	m.debug("handlePlayerBrowseUpdate received message: %T", msg)
 
 	// If we're in filtering mode, let the list handle the input
 	if m.playerList.FilterState() == list.Filtering {
@@ -131,7 +131,7 @@ func (m *model) handlePlayerBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "enter":
 			// Select Server
 			if selected, ok := m.playerList.SelectedItem().(playerItem); ok {
-				log.Debug("Selecting player: %s (clientIdentifier: %s)", selected.title, selected.clientIdentifier)
+				m.debug("Selecting player: %s (clientIdentifier: %s)", selected.title, selected.clientIdentifier)
 				m.lastCommand = fmt.Sprintf("Selecting %s", selected.title)
 				return m, m.selectPlayerCmd(selected)
 			}
@@ -151,11 +151,11 @@ func (m *model) handlePlayerBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case playersFetchedMsg:
-		log.Debug("playersFetchedMsg received with %d players, error: %v", len(msg.players), msg.err)
+		m.debug("playersFetchedMsg received with %d players, error: %v", len(msg.players), msg.err)
 		if msg.err != nil {
 			errMsg := fmt.Sprintf("Error fetching players: %v", msg.err)
 			m.status = errMsg
-			log.Debug("%s", errMsg)
+			m.debug("%s", errMsg)
 			return m, nil
 		}
 
@@ -163,7 +163,7 @@ func (m *model) handlePlayerBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var items []list.Item
 		for i, player := range msg.players {
 			if i < 5 { // Only log first 5 servers to avoid log spam
-				log.Debug("Adding player %d: %s (ratingKey: %s)", i+1, player.Name, player.ClientIdentifier)
+				m.debug("Adding player %d: %s (ratingKey: %s)", i+1, player.Name, player.ClientIdentifier)
 			}
 			items = append(items, playerItem{
 				title:            player.Name,
@@ -174,7 +174,7 @@ func (m *model) handlePlayerBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 			})
 		}
 
-		log.Debug("Creating new list with %d items", len(items))
+		m.debug("Creating new list with %d items", len(items))
 		// Create a new list with the fetched items
 		// Preserve the current filter state
 		filterState := m.playerList.FilterState()
@@ -194,7 +194,7 @@ func (m *model) handlePlayerBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.playerList.FilterInput.SetValue(filterValue)
 		}
 		m.status = fmt.Sprintf("Loaded %d players", len(msg.players))
-		log.Debug("Updated model with new player list. List has %d items", m.playerList.VisibleItems())
+		m.debug("Updated model with new player list. List has %d items", m.playerList.VisibleItems())
 
 		// Force a redraw
 		return m, tea.Batch(tea.ClearScreen, func() tea.Msg { return nil })
