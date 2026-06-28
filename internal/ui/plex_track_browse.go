@@ -40,21 +40,8 @@ func (m *model) initAlbumTrackBrowse(albumTitle, albumRatingKey string) {
 	m.currentAlbumKey = albumRatingKey
 	m.currentAlbumName = albumTitle
 
-	delegate := list.NewDefaultDelegate()
-	delegate.ShowDescription = false
-
 	items := []list.Item{trackItem{title: "Loading tracks..."}}
-	m.trackList = list.New(items, delegate, 0, 0)
-	m.trackList.Title = fmt.Sprintf("Tracks - %s", albumTitle)
-	m.trackList.SetShowFilter(true)
-	m.trackList.SetFilteringEnabled(true)
-	m.trackList.Styles.Title = titleStyle
-	m.trackList.Styles.PaginationStyle = paginationStyle
-	m.trackList.Styles.HelpStyle = helpStyle
-
-	if m.width > 0 && m.height > 0 {
-		m.trackList.SetSize(m.width/2-4, m.height-4)
-	}
+	m.trackList = newBrowseList(fmt.Sprintf("Tracks - %s", albumTitle), items, m.width, m.height)
 }
 
 func (m *model) initPlaylistTrackBrowse(playlistTitle, playlistRatingKey string) {
@@ -63,28 +50,13 @@ func (m *model) initPlaylistTrackBrowse(playlistTitle, playlistRatingKey string)
 	m.currentPlaylistKey = playlistRatingKey
 	m.currentPlaylistName = playlistTitle
 
-	delegate := list.NewDefaultDelegate()
-	delegate.ShowDescription = false
-
 	items := []list.Item{trackItem{title: "Loading tracks..."}}
-	m.trackList = list.New(items, delegate, 0, 0)
-	m.trackList.Title = fmt.Sprintf("Tracks - %s", playlistTitle)
-	m.trackList.SetShowFilter(true)
-	m.trackList.SetFilteringEnabled(true)
-	m.trackList.Styles.Title = titleStyle
-	m.trackList.Styles.PaginationStyle = paginationStyle
-	m.trackList.Styles.HelpStyle = helpStyle
-
-	if m.width > 0 && m.height > 0 {
-		m.trackList.SetSize(m.width/2-4, m.height-4)
-	}
+	m.trackList = newBrowseList(fmt.Sprintf("Tracks - %s", playlistTitle), items, m.width, m.height)
 }
 
 func (m *model) fetchAlbumTracksCmd(albumRatingKey string) tea.Cmd {
 	m.debug("Fetching album tracks...")
-	footerHeight := 3
-	availableHeight := m.height - footerHeight - 5
-	m.trackList.SetSize(m.width/2-4, availableHeight)
+	resizeBrowseListForFetch(&m.trackList, m.width, m.height)
 
 	if m.config == nil {
 		return func() tea.Msg {
@@ -121,9 +93,7 @@ func (m *model) fetchAlbumTracksCmd(albumRatingKey string) tea.Cmd {
 
 func (m *model) fetchPlaylistTracksCmd(playlistRatingKey string) tea.Cmd {
 	m.debug("Fetching playlist tracks...")
-	footerHeight := 3
-	availableHeight := m.height - footerHeight - 5
-	m.trackList.SetSize(m.width/2-4, availableHeight)
+	resizeBrowseListForFetch(&m.trackList, m.width, m.height)
 
 	if m.config == nil {
 		return func() tea.Msg {
@@ -304,16 +274,7 @@ func (m *model) handleTrackBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 			})
 		}
 
-		filterState := m.trackList.FilterState()
-		filterValue := m.trackList.FilterValue()
-
-		m.trackList.SetItems(items)
-		m.trackList.ResetSelected()
-
-		if filterState == list.Filtering {
-			m.trackList.ResetFilter()
-			m.trackList.FilterInput.SetValue(filterValue)
-		}
+		replaceBrowseListItems(&m.trackList, items)
 
 		m.status = fmt.Sprintf("Loaded %d tracks", len(msg.tracks))
 		return m, tea.Batch(tea.ClearScreen, func() tea.Msg { return nil })

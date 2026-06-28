@@ -48,10 +48,7 @@ func (i serverItem) FilterValue() string {
 // fetchServersCmd fetches servers from the Plex server
 func (m *model) fetchServersCmd() tea.Cmd {
 	m.debug("Fetching servers...")
-	// ✅ Reapply sizing
-	footerHeight := 3 // or dynamically measure your footer
-	availableHeight := m.height - footerHeight - 5
-	m.serverList.SetSize(m.width/2-4, availableHeight)
+	resizeBrowseListForFetch(&m.serverList, m.width, m.height)
 	if m.config == nil {
 		return func() tea.Msg {
 			return serversFetchedMsg{err: fmt.Errorf("no config available")}
@@ -76,23 +73,8 @@ func (m *model) initServerBrowse() {
 	m.panelMode = panelModePlexServers
 	m.status = "Loading servers..."
 
-	// Create a new default delegate with custom styling
-	delegate := list.NewDefaultDelegate()
-	delegate.ShowDescription = false
-
 	items := []list.Item{serverItem{title: "Loading servers..."}}
-
-	// Create the list with empty items for now
-	m.serverList = list.New(items, delegate, 0, 0)
-	m.serverList.Title = "Plex Servers"
-	m.serverList.SetShowFilter(true)
-	m.serverList.SetFilteringEnabled(true)
-	m.serverList.Styles.Title = titleStyle
-	m.serverList.Styles.PaginationStyle = paginationStyle
-	m.serverList.Styles.HelpStyle = helpStyle
-	if m.width > 0 && m.height > 0 {
-		m.serverList.SetSize(m.width/2-4, m.height-4)
-	}
+	m.serverList = newBrowseList("Plex Servers", items, m.width, m.height)
 }
 func (m *model) selectServerCmd(server serverItem) tea.Cmd {
 	if m.selected == "" {
@@ -197,24 +179,7 @@ func (m *model) handleServerBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		m.debug("Creating new list with %d items", len(items))
-		// Create a new list with the fetched items
-		// Preserve the current filter state
-		filterState := m.serverList.FilterState()
-		filterValue := m.serverList.FilterValue()
-
-		// Create a new default delegate with custom styling
-		delegate := list.NewDefaultDelegate()
-		delegate.ShowDescription = false // Don't show description
-
-		// Create new list with existing items
-		m.serverList.SetItems(items)
-		m.serverList.ResetSelected()
-
-		// Restore filter state if there was one
-		if filterState == list.Filtering {
-			m.serverList.ResetFilter()
-			m.serverList.FilterInput.SetValue(filterValue)
-		}
+		replaceBrowseListItems(&m.serverList, items)
 		m.status = fmt.Sprintf("Loaded %d servers", len(msg.servers))
 		m.debug("Updated model with new server list. List has %d items", m.serverList.VisibleItems())
 

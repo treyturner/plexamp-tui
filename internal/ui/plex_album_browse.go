@@ -47,10 +47,7 @@ func (a *albumItem) ToggleFavorite() {
 // fetchAlbumsCmd fetches albums from the Plex server
 func (m *model) fetchAlbumsCmd() tea.Cmd {
 	m.debug("Fetching albums...")
-	// ✅ Reapply sizing
-	footerHeight := 3 // or dynamically measure your footer
-	availableHeight := m.height - footerHeight - 5
-	m.albumList.SetSize(m.width/2-4, availableHeight)
+	resizeBrowseListForFetch(&m.albumList, m.width, m.height)
 	if m.config == nil {
 		return func() tea.Msg {
 			return albumsFetchedMsg{err: fmt.Errorf("no config available")}
@@ -78,20 +75,8 @@ func (m *model) initAlbumBrowse() {
 	m.panelMode = panelModePlexAlbums
 	m.status = "Loading albums..."
 
-	// Create a new default delegate with custom styling
-	delegate := list.NewDefaultDelegate()
-	delegate.ShowDescription = false
-
 	items := []list.Item{albumItem{title: "Loading albums..."}}
-
-	// Create the list with empty items for now
-	m.albumList = list.New(items, delegate, 0, 0)
-	m.albumList.Title = "Plex Albums"
-	m.albumList.SetShowFilter(true)
-	m.albumList.SetFilteringEnabled(true)
-	m.albumList.Styles.Title = titleStyle
-	m.albumList.Styles.PaginationStyle = paginationStyle
-	m.albumList.Styles.HelpStyle = helpStyle
+	m.albumList = newBrowseList("Plex Albums", items, m.width, m.height)
 	m.albumList.AdditionalShortHelpKeys = func() []key.Binding {
 		return []key.Binding{
 			key.NewBinding(
@@ -115,9 +100,6 @@ func (m *model) initAlbumBrowse() {
 				key.WithHelp("R", "Refresh Albums"),
 			),
 		}
-	}
-	if m.width > 0 && m.height > 0 {
-		m.albumList.SetSize(m.width/2-4, m.height-4)
 	}
 }
 
@@ -261,31 +243,11 @@ func (m *model) handleAlbumBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		m.debug("Creating new list with %d items", len(items))
-		// Create a new list with the fetched items
-		// Preserve the current filter state
-		filterState := m.albumList.FilterState()
-		filterValue := m.albumList.FilterValue()
-
-		// Create a new default delegate with custom styling
-		delegate := list.NewDefaultDelegate()
-		delegate.ShowDescription = false // Don't show description
-
-		// Create new list with existing items
-		m.albumList.SetItems(items)
-		m.albumList.ResetSelected()
-
-		// Restore filter state if there was one
-		if filterState == list.Filtering {
-			m.albumList.ResetFilter()
-			m.albumList.FilterInput.SetValue(filterValue)
-		}
+		replaceBrowseListItems(&m.albumList, items)
 		m.status = fmt.Sprintf("Loaded %d albums", len(msg.albums))
 		m.debug("Updated model with new album list. List has %d items", m.albumList.VisibleItems())
 
-		// ✅ Reapply sizing
-		footerHeight := 3 // or dynamically measure your footer
-		availableHeight := m.height - footerHeight - 5
-		m.albumList.SetSize(m.width/2-4, availableHeight)
+		resizeBrowseListForFetch(&m.albumList, m.width, m.height)
 
 		// Force a redraw
 		return m, tea.Batch(tea.ClearScreen, func() tea.Msg { return nil })

@@ -45,10 +45,7 @@ func (i playerItem) FilterValue() string {
 // fetchPlayersCmd fetches players from the Plex server
 func (m *model) fetchPlayersCmd() tea.Cmd {
 	m.debug("Fetching players...")
-	// ✅ Reapply sizing
-	footerHeight := 3 // or dynamically measure your footer
-	availableHeight := m.height - footerHeight - 5
-	m.playerList.SetSize(m.width/2-4, availableHeight)
+	resizeBrowseListForFetch(&m.playerList, m.width, m.height)
 	if m.config == nil {
 		return func() tea.Msg {
 			return playersFetchedMsg{err: fmt.Errorf("no config available")}
@@ -73,23 +70,8 @@ func (m *model) initPlayerBrowse() {
 	m.panelMode = panelModePlexPlayers
 	m.status = "Loading players..."
 
-	// Create a new default delegate with custom styling
-	delegate := list.NewDefaultDelegate()
-	delegate.ShowDescription = false
-
 	items := []list.Item{playerItem{title: "Loading players..."}}
-
-	// Create the list with empty items for now
-	m.playerList = list.New(items, delegate, 0, 0)
-	m.playerList.Title = "Plex Players"
-	m.playerList.SetShowFilter(true)
-	m.playerList.SetFilteringEnabled(true)
-	m.playerList.Styles.Title = titleStyle
-	m.playerList.Styles.PaginationStyle = paginationStyle
-	m.playerList.Styles.HelpStyle = helpStyle
-	if m.width > 0 && m.height > 0 {
-		m.playerList.SetSize(m.width/2-4, m.height-4)
-	}
+	m.playerList = newBrowseList("Plex Players", items, m.width, m.height)
 }
 func (m *model) selectPlayerCmd(player playerItem) tea.Cmd {
 	if m.config == nil {
@@ -175,24 +157,7 @@ func (m *model) handlePlayerBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		m.debug("Creating new list with %d items", len(items))
-		// Create a new list with the fetched items
-		// Preserve the current filter state
-		filterState := m.playerList.FilterState()
-		filterValue := m.playerList.FilterValue()
-
-		// Create a new default delegate with custom styling
-		delegate := list.NewDefaultDelegate()
-		delegate.ShowDescription = false // Don't show description
-
-		// Create new list with existing items
-		m.playerList.SetItems(items)
-		m.playerList.ResetSelected()
-
-		// Restore filter state if there was one
-		if filterState == list.Filtering {
-			m.playerList.ResetFilter()
-			m.playerList.FilterInput.SetValue(filterValue)
-		}
+		replaceBrowseListItems(&m.playerList, items)
 		m.status = fmt.Sprintf("Loaded %d players", len(msg.players))
 		m.debug("Updated model with new player list. List has %d items", m.playerList.VisibleItems())
 
