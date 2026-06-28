@@ -99,11 +99,4 @@ func main() {
 	if _, err := p.Run(); err != nil {
 		fmt.Println("Error:", err)
 	}
-
-	serverInfo, err := plexClient.GetPlexServerInformation()
-	if err != nil {
-		log.Debug("Error getting server information: %v", err)
-		os.Exit(1)
-	}
-	log.Debug("Server information: %v", serverInfo)
 }
