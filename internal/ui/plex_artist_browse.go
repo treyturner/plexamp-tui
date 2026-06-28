@@ -28,10 +28,7 @@ type artistsFetchedMsg struct {
 // fetchArtistsCmd fetches artists from the Plex server
 func (m *model) fetchArtistsCmd() tea.Cmd {
 	m.debug("Fetching artists...")
-	// ✅ Reapply sizing
-	footerHeight := 3 // or dynamically measure your footer
-	availableHeight := m.height - footerHeight - 5
-	m.artistList.SetSize(m.width/2-4, availableHeight)
+	resizeBrowseListForFetch(&m.artistList, m.width, m.height)
 	if m.config == nil {
 		return func() tea.Msg {
 			return artistsFetchedMsg{err: fmt.Errorf("no config available")}
@@ -121,17 +118,7 @@ func (m *model) initArtistBrowse() {
 	m.debug("initArtistBrowse - panelMode: %s, status: %s", m.panelMode, m.status)
 
 	items := []list.Item{artistItem{title: "Loading artists..."}}
-	// Create a new default delegate with custom styling
-	delegate := list.NewDefaultDelegate()
-	delegate.ShowDescription = false // Don't show description
-
-	m.artistList = list.New(items, delegate, 0, 0)
-	m.artistList.Title = "Plex Artists"
-	m.artistList.SetShowFilter(true)
-	m.artistList.SetFilteringEnabled(true)
-	m.artistList.Styles.Title = titleStyle
-	m.artistList.Styles.PaginationStyle = paginationStyle
-	m.artistList.Styles.HelpStyle = helpStyle
+	m.artistList = newBrowseList("Plex Artists", items, m.width, m.height)
 	m.artistList.AdditionalShortHelpKeys = func() []key.Binding {
 		return []key.Binding{
 			key.NewBinding(
@@ -161,9 +148,6 @@ func (m *model) initArtistBrowse() {
 		}
 	}
 
-	if m.width > 0 && m.height > 0 {
-		m.artistList.SetSize(m.width/2-4, m.height-4)
-	}
 	m.debug("Initialized artist list with size: %dx%d", m.width/2-4, m.height-4)
 }
 
@@ -284,24 +268,7 @@ func (m *model) handleArtistBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		m.debug("Creating new list with %d items", len(items))
-		// Create a new list with the fetched items
-		// Preserve the current filter state
-		filterState := m.artistList.FilterState()
-		filterValue := m.artistList.FilterValue()
-
-		// Create a new default delegate with custom styling
-		delegate := list.NewDefaultDelegate()
-		delegate.ShowDescription = false // Don't show description
-
-		// Create new list with existing items
-		m.artistList.SetItems(items)
-		m.artistList.ResetSelected()
-
-		// Restore filter state if there was one
-		if filterState == list.Filtering {
-			m.artistList.ResetFilter()
-			m.artistList.FilterInput.SetValue(filterValue)
-		}
+		replaceBrowseListItems(&m.artistList, items)
 		m.status = fmt.Sprintf("Loaded %d artists", len(msg.artists))
 		m.debug("Updated model with new artist list. List has %d items", m.artistList.VisibleItems())
 

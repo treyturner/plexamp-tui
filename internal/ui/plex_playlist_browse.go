@@ -53,10 +53,7 @@ func (p *playlistItem) ToggleFavorite() {
 // fetchPlaylistsCmd fetches playlists from the Plex server
 func (m *model) fetchPlaylistsCmd() tea.Cmd {
 	m.debug("Fetching playlists...")
-	// ✅ Reapply sizing
-	footerHeight := 3 // or dynamically measure your footer
-	availableHeight := m.height - footerHeight - 5
-	m.playlistList.SetSize(m.width/2-4, availableHeight)
+	resizeBrowseListForFetch(&m.playlistList, m.width, m.height)
 	if m.config == nil {
 		return func() tea.Msg {
 			return playlistsFetchedMsg{err: fmt.Errorf("no config available")}
@@ -83,20 +80,8 @@ func (m *model) initPlaylistBrowse() {
 	m.panelMode = panelModePlexPlaylists
 	m.status = "Loading playlists..."
 
-	// Create a new default delegate with custom styling
-	delegate := list.NewDefaultDelegate()
-	delegate.ShowDescription = false
-
 	items := []list.Item{playlistItem{title: "Loading playlists..."}}
-
-	// Create the list with empty items for now
-	m.playlistList = list.New(items, delegate, 0, 0)
-	m.playlistList.Title = "Plex Playlists"
-	m.playlistList.SetShowFilter(true)
-	m.playlistList.SetFilteringEnabled(true)
-	m.playlistList.Styles.Title = titleStyle
-	m.playlistList.Styles.PaginationStyle = paginationStyle
-	m.playlistList.Styles.HelpStyle = helpStyle
+	m.playlistList = newBrowseList("Plex Playlists", items, m.width, m.height)
 
 	m.playlistList.AdditionalShortHelpKeys = func() []key.Binding {
 		return []key.Binding{
@@ -121,9 +106,6 @@ func (m *model) initPlaylistBrowse() {
 				key.WithHelp("R", "Refresh Playlists"),
 			),
 		}
-	}
-	if m.width > 0 && m.height > 0 {
-		m.playlistList.SetSize(m.width/2-4, m.height-4)
 	}
 }
 
@@ -262,24 +244,7 @@ func (m *model) handlePlaylistBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		m.debug("Creating new list with %d items", len(items))
-		// Create a new list with the fetched items
-		// Preserve the current filter state
-		filterState := m.playlistList.FilterState()
-		filterValue := m.playlistList.FilterValue()
-
-		// Create a new default delegate with custom styling
-		delegate := list.NewDefaultDelegate()
-		delegate.ShowDescription = false // Don't show description
-
-		// Create new list with existing items
-		m.playlistList.SetItems(items)
-		m.playlistList.ResetSelected()
-
-		// Restore filter state if there was one
-		if filterState == list.Filtering {
-			m.playlistList.ResetFilter()
-			m.playlistList.FilterInput.SetValue(filterValue)
-		}
+		replaceBrowseListItems(&m.playlistList, items)
 		m.status = fmt.Sprintf("Loaded %d playlists", len(msg.playlists))
 		m.debug("Updated model with new playlist list. List has %d items", m.playlistList.VisibleItems())
 

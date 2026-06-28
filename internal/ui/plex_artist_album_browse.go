@@ -60,17 +60,8 @@ func (m *model) initArtistAlbumBrowse(artist artistItem) {
 	m.currentArtistKey = artist.ratingKey
 	m.currentArtistName = artist.title
 
-	delegate := list.NewDefaultDelegate()
-	delegate.ShowDescription = false
-
 	items := []list.Item{albumItem{title: "Loading albums..."}}
-	m.artistAlbumList = list.New(items, delegate, 0, 0)
-	m.artistAlbumList.Title = fmt.Sprintf("Albums - %s", artist.title)
-	m.artistAlbumList.SetShowFilter(true)
-	m.artistAlbumList.SetFilteringEnabled(true)
-	m.artistAlbumList.Styles.Title = titleStyle
-	m.artistAlbumList.Styles.PaginationStyle = paginationStyle
-	m.artistAlbumList.Styles.HelpStyle = helpStyle
+	m.artistAlbumList = newBrowseList(fmt.Sprintf("Albums - %s", artist.title), items, m.width, m.height)
 	m.artistAlbumList.AdditionalShortHelpKeys = func() []key.Binding {
 		return []key.Binding{
 			key.NewBinding(
@@ -94,10 +85,6 @@ func (m *model) initArtistAlbumBrowse(artist artistItem) {
 				key.WithHelp("R", "Refresh Albums"),
 			),
 		}
-	}
-
-	if m.width > 0 && m.height > 0 {
-		m.artistAlbumList.SetSize(m.width/2-4, m.height-4)
 	}
 }
 
@@ -224,16 +211,7 @@ func (m *model) handleArtistAlbumBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) 
 			})
 		}
 
-		filterState := m.artistAlbumList.FilterState()
-		filterValue := m.artistAlbumList.FilterValue()
-
-		m.artistAlbumList.SetItems(items)
-		m.artistAlbumList.ResetSelected()
-
-		if filterState == list.Filtering {
-			m.artistAlbumList.ResetFilter()
-			m.artistAlbumList.FilterInput.SetValue(filterValue)
-		}
+		replaceBrowseListItems(&m.artistAlbumList, items)
 
 		m.status = fmt.Sprintf("Loaded %d albums", len(msg.albums))
 		return m, tea.Batch(tea.ClearScreen, func() tea.Msg { return nil })
