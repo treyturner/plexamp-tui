@@ -140,7 +140,13 @@ const (
 	playbackControlShuffle
 )
 
-var errNoPlayerSelected = errors.New("no Plexamp instance selected")
+type playbackControlError string
+
+func (e playbackControlError) Error() string {
+	return string(e)
+}
+
+const errNoPlayerSelected playbackControlError = "no Plexamp instance selected"
 
 type playbackControlMsg struct {
 	action           playbackControlAction

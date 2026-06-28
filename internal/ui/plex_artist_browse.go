@@ -9,7 +9,6 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 )
 
 // =====================
@@ -315,10 +314,3 @@ func (a *artistItem) ToggleFavorite() {
 		a.title = fmt.Sprintf("%s ★", a.title)
 	}
 }
-
-// Custom styles for the list
-var (
-	titleStyle      = lipgloss.NewStyle().MarginLeft(2)
-	helpStyle       = lipgloss.NewStyle().Foreground(lipgloss.Color("240")).Margin(1, 0, 0, 2)
-	paginationStyle = list.DefaultStyles().PaginationStyle.PaddingLeft(4)
-)
