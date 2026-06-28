@@ -150,14 +150,24 @@ func (m *model) playTrackCmd(ratingKey string, requestID int) tea.Cmd {
 			}
 		}
 	}
+	if m.deps.plexClient == nil {
+		return func() tea.Msg {
+			return trackPlaybackMsg{
+				success:   false,
+				requestID: requestID,
+				ratingKey: ratingKey,
+				err:       fmt.Errorf("no Plex client available"),
+			}
+		}
+	}
 
 	serverIP := m.selected
 	serverID := m.config.ServerID
 	shuffle := m.shuffle
-	deps := m.deps
+	plexClient := m.deps.plexClient
 
 	return func() tea.Msg {
-		err := PlayMetadata(serverIP, serverID, ratingKey, shuffle, deps)
+		err := plexClient.PlayMetadata(serverIP, serverID, ratingKey, shuffle)
 		if err != nil {
 			return trackPlaybackMsg{
 				success:   false,

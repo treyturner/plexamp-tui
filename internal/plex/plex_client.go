@@ -69,3 +69,10 @@ func statusAllowed(status int, okStatuses []int) bool {
 	}
 	return false
 }
+
+func (p *PlexClient) debug(format string, v ...interface{}) {
+	if p.logger == nil {
+		return
+	}
+	p.logger.Debug(format, v...)
+}

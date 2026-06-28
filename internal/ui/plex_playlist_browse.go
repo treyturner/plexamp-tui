@@ -121,15 +121,20 @@ func (m *model) playPlaylistCmd(ratingKey string) tea.Cmd {
 			return playbackTriggeredMsg{success: false, err: fmt.Errorf("no config available")}
 		}
 	}
+	if m.deps.plexClient == nil {
+		return func() tea.Msg {
+			return playbackTriggeredMsg{success: false, err: fmt.Errorf("no Plex client available")}
+		}
+	}
 
 	serverIP := m.selected
 	serverID := m.config.ServerID
 	shuffle := m.shuffle
 	requestID := m.nextPlaybackRequestID()
-	deps := m.deps
+	plexClient := m.deps.plexClient
 
 	return func() tea.Msg {
-		err := PlayPlaylist(serverIP, serverID, ratingKey, shuffle, deps)
+		err := plexClient.PlayPlaylist(serverIP, serverID, ratingKey, shuffle)
 		if err != nil {
 			return playbackTriggeredMsg{success: false, selected: serverIP, requestID: requestID, err: err}
 		}
