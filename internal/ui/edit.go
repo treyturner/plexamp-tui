@@ -325,7 +325,7 @@ func (m *model) deletePlaybackItem(index int) error {
 	}
 	m.playbackList.SetItems(items)
 
-	if err := favsManager.Remove(favToRemove.Type, favToRemove.MetadataKey); err != nil {
+	if err := m.deps.favsManager.Remove(favToRemove.Type, favToRemove.MetadataKey); err != nil {
 		return err
 	}
 
@@ -337,7 +337,7 @@ func (m *model) savePlaybackItem(name string, k string, t string) error {
 	m.playbackConfig.Items = append(m.playbackConfig.Items, fav)
 	m.playbackList.SetItems(append(m.playbackList.Items(), item{Name: name, MetadataKey: k, Type: t}))
 
-	if err := favsManager.Add(fav); err != nil {
+	if err := m.deps.favsManager.Add(fav); err != nil {
 		return err
 	}
 	return nil

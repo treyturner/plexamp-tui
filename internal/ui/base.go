@@ -35,6 +35,8 @@ func (i item) FilterValue() string    { return string(i.Name) }
 func (i item) GetMetadataKey() string { return i.MetadataKey }
 
 type model struct {
+	deps uiDeps
+
 	playbackList          list.Model
 	artistList            list.Model // Plex artist browse list
 	artistAlbumList       list.Model // Plex artist album browse list
@@ -134,29 +136,31 @@ type UiManager struct {
 	Model model
 }
 
-var (
-	cfg         *config.Config
-	favs        *config.Favorites
-	plexClient  *plex.PlexClient
-	cfgManager  *config.Manager
+type uiDeps struct {
 	log         *logger.Logger
+	cfgManager  *config.Manager
+	plexClient  *plex.PlexClient
 	favsManager *config.FavoritesManager
-)
+}
+
+func (d uiDeps) debug(format string, v ...interface{}) {
+	if d.log == nil {
+		return
+	}
+	d.log.Debug(format, v...)
+}
+
+func (m model) debug(format string, v ...interface{}) {
+	m.deps.debug(format, v...)
+}
 
 func NewUiManager(logger *logger.Logger, config *config.Config, manager *config.Manager,
 	favorites *config.Favorites, client *plex.PlexClient, favoritesMgr *config.FavoritesManager,
 ) *UiManager {
-	log = logger
-	cfg = config
-	cfgManager = manager
-	favs = favorites
-	plexClient = client
-	favsManager = favoritesMgr
-
 	// Create playback list
 	var playbackItems []list.Item
-	if favs != nil {
-		for _, pb := range favs.Items {
+	if favorites != nil {
+		for _, pb := range favorites.Items {
 			playbackItems = append(playbackItems, item{Name: pb.Name, Type: pb.Type, MetadataKey: pb.MetadataKey})
 		}
 	}
@@ -219,6 +223,12 @@ func NewUiManager(logger *logger.Logger, config *config.Config, manager *config.
 	}
 
 	m := model{
+		deps: uiDeps{
+			log:         logger,
+			cfgManager:  manager,
+			plexClient:  client,
+			favsManager: favoritesMgr,
+		},
 		playbackList:      playbackList,
 		artistList:        list.New([]list.Item{}, list.NewDefaultDelegate(), 0, 0),
 		artistAlbumList:   list.New([]list.Item{}, list.NewDefaultDelegate(), 0, 0),
@@ -227,13 +237,13 @@ func NewUiManager(logger *logger.Logger, config *config.Config, manager *config.
 		playlistList:      list.New([]list.Item{}, list.NewDefaultDelegate(), 0, 0),
 		serverList:        list.New([]list.Item{}, list.NewDefaultDelegate(), 0, 0),
 		playerList:        list.New([]list.Item{}, list.NewDefaultDelegate(), 0, 0),
-		selected:          cfg.SelectedPlayer,
-		usingDefaultCfg:   cfgManager.UsingDefault,
-		playbackConfig:    favs,
-		config:            cfg,
+		selected:          config.SelectedPlayer,
+		usingDefaultCfg:   manager.UsingDefault,
+		playbackConfig:    favorites,
+		config:            config,
 		panelMode:         "playback",
 		shuffle:           true, // Default shuffle to ON
-		plexAuthenticated: plexClient.VerifyPlexAuthentication(),
+		plexAuthenticated: client.VerifyPlexAuthentication(),
 	}
 
 	return &UiManager{
@@ -266,7 +276,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.config.SelectedPlayer = msg.player.address
 			m.config.SelectedPlayerName = msg.player.title
 			m.selected = msg.player.address
-			if err := cfgManager.Save(m.config); err != nil {
+			if err := m.deps.cfgManager.Save(m.config); err != nil {
 				m.status = "Error saving player selection: " + err.Error()
 				m.lastCommand = "Player Selection Save Failed"
 				return m, nil
@@ -294,7 +304,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			found := false
 			if len(msg.libraries) == 0 {
-				log.Debug("No libraries found on this server")
+				m.debug("No libraries found on this server")
 				m.panelMode = "playback"
 				m.lastCommand = "Server Selected Failed, No Libraries"
 				m.status = "No libraries found on this server"
@@ -310,13 +320,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 			if !found {
-				log.Debug("Current Library not found on this server, using first library")
+				m.debug("Current Library not found on this server, using first library")
 				m.config.PlexLibraryName = msg.libraries[0].Title
 				m.config.PlexLibraryID = msg.libraries[0].Key
 			}
 
-			log.Debug("Saving server config: %v", m.config)
-			if err := cfgManager.Save(m.config); err != nil {
+			m.debug("Saving server config: %v", m.config)
+			if err := m.deps.cfgManager.Save(m.config); err != nil {
 				m.status = "Error saving server selection: " + err.Error()
 				m.lastCommand = "Server Selection Save Failed"
 				return m, nil
@@ -496,7 +506,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				ignoreThreshold = minThreshold
 			}
 			if msg.TrackKey == m.ignoreTrackKey && now.Before(m.ignoreTrackUntil) && msg.Position >= ignoreThreshold {
-				log.Debug(
+				m.debug(
 					"Ignoring stale transition timeline (trackKey=%s, pos=%d, threshold=%d)",
 					msg.TrackKey, msg.Position, ignoreThreshold,
 				)
@@ -516,14 +526,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.pendingTrackUntil = time.Time{}
 			case "":
 				if !m.pendingTrackUntil.IsZero() && now.Before(m.pendingTrackUntil) {
-					log.Debug(
+					m.debug(
 						"Ignoring timeline with empty track key while waiting for pending track key=%s",
 						m.pendingTrackKey,
 					)
 					return m, nil
 				}
 				if !m.pendingTrackUntil.IsZero() {
-					log.Debug(
+					m.debug(
 						"Pending track key timeout reached with empty track key; clearing filter (pending=%s)",
 						m.pendingTrackKey,
 					)
@@ -532,13 +542,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			default:
 				if !m.pendingTrackUntil.IsZero() && now.Before(m.pendingTrackUntil) {
-					log.Debug(
+					m.debug(
 						"Ignoring mismatched timeline track while waiting (got=%s, want=%s)",
 						msg.TrackKey, m.pendingTrackKey,
 					)
 					return m, nil
 				}
-				log.Debug(
+				m.debug(
 					"Pending track key timeout reached; clearing filter (got=%s, want=%s)",
 					msg.TrackKey, m.pendingTrackKey,
 				)
@@ -613,7 +623,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case trackPlaybackMsg:
 		if msg.requestID != m.trackPlaybackReqID {
-			log.Debug(
+			m.debug(
 				"Ignoring stale trackPlaybackMsg (requestID=%d, current=%d)",
 				msg.requestID, m.trackPlaybackReqID,
 			)

@@ -80,7 +80,7 @@ func (m *model) initPlaylistTrackBrowse(playlistTitle, playlistRatingKey string)
 }
 
 func (m *model) fetchAlbumTracksCmd(albumRatingKey string) tea.Cmd {
-	log.Debug("Fetching album tracks...")
+	m.debug("Fetching album tracks...")
 	footerHeight := 3
 	availableHeight := m.height - footerHeight - 5
 	m.trackList.SetSize(m.width/2-4, availableHeight)
@@ -95,7 +95,7 @@ func (m *model) fetchAlbumTracksCmd(albumRatingKey string) tea.Cmd {
 		}
 	}
 
-	token := plexClient.GetPlexToken()
+	token := m.deps.plexClient.GetPlexToken()
 	if token == "" {
 		return func() tea.Msg {
 			return tracksFetchedMsg{
@@ -108,7 +108,7 @@ func (m *model) fetchAlbumTracksCmd(albumRatingKey string) tea.Cmd {
 
 	serverAddr := m.config.PlexServerAddr
 	return func() tea.Msg {
-		tracks, err := plexClient.FetchAlbumTracks(serverAddr, albumRatingKey, token)
+		tracks, err := m.deps.plexClient.FetchAlbumTracks(serverAddr, albumRatingKey, token)
 		return tracksFetchedMsg{
 			tracks:     tracks,
 			context:    "album",
@@ -119,7 +119,7 @@ func (m *model) fetchAlbumTracksCmd(albumRatingKey string) tea.Cmd {
 }
 
 func (m *model) fetchPlaylistTracksCmd(playlistRatingKey string) tea.Cmd {
-	log.Debug("Fetching playlist tracks...")
+	m.debug("Fetching playlist tracks...")
 	footerHeight := 3
 	availableHeight := m.height - footerHeight - 5
 	m.trackList.SetSize(m.width/2-4, availableHeight)
@@ -134,7 +134,7 @@ func (m *model) fetchPlaylistTracksCmd(playlistRatingKey string) tea.Cmd {
 		}
 	}
 
-	token := plexClient.GetPlexToken()
+	token := m.deps.plexClient.GetPlexToken()
 	if token == "" {
 		return func() tea.Msg {
 			return tracksFetchedMsg{
@@ -147,7 +147,7 @@ func (m *model) fetchPlaylistTracksCmd(playlistRatingKey string) tea.Cmd {
 
 	serverAddr := m.config.PlexServerAddr
 	return func() tea.Msg {
-		tracks, err := plexClient.FetchPlaylistTracks(serverAddr, playlistRatingKey, token)
+		tracks, err := m.deps.plexClient.FetchPlaylistTracks(serverAddr, playlistRatingKey, token)
 		return tracksFetchedMsg{
 			tracks:     tracks,
 			context:    "playlist",
@@ -183,9 +183,10 @@ func (m *model) playTrackCmd(ratingKey string, requestID int) tea.Cmd {
 	serverIP := m.selected
 	serverID := m.config.ServerID
 	shuffle := m.shuffle
+	deps := m.deps
 
 	return func() tea.Msg {
-		err := PlayMetadata(serverIP, serverID, ratingKey, shuffle)
+		err := PlayMetadata(serverIP, serverID, ratingKey, shuffle, deps)
 		if err != nil {
 			return trackPlaybackMsg{
 				success:   false,
@@ -203,7 +204,7 @@ func (m *model) playTrackCmd(ratingKey string, requestID int) tea.Cmd {
 }
 
 func (m *model) handleTrackBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
-	log.Debug("handleTrackBrowseUpdate received message: %T", msg)
+	m.debug("handleTrackBrowseUpdate received message: %T", msg)
 
 	if m.trackList.FilterState() == list.Filtering {
 		var cmd tea.Cmd
@@ -224,10 +225,10 @@ func (m *model) handleTrackBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "enter":
 			if selected, ok := m.trackList.SelectedItem().(trackItem); ok {
 				if selected.ratingKey == "" {
-					log.Debug("Ignoring track playback for item without rating key")
+					m.debug("Ignoring track playback for item without rating key")
 					return m, nil
 				}
-				log.Debug("Playing track: %s (ratingKey: %s)", selected.title, selected.ratingKey)
+				m.debug("Playing track: %s (ratingKey: %s)", selected.title, selected.ratingKey)
 				m.lastCommand = fmt.Sprintf("Playing %s", selected.title)
 				m.trackPlaybackReqID++
 				requestID := m.trackPlaybackReqID
@@ -243,7 +244,7 @@ func (m *model) handleTrackBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case tracksFetchedMsg:
-		log.Debug(
+		m.debug(
 			"tracksFetchedMsg received with %d tracks, context=%s, requestKey=%s, error=%v",
 			len(msg.tracks), msg.context, msg.requestKey, msg.err,
 		)
@@ -252,7 +253,7 @@ func (m *model) handleTrackBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "album":
 			// Ignore stale/mismatched fetches so late responses cannot overwrite the active browse list.
 			if m.panelMode != "plex-album-tracks" || msg.requestKey != m.currentAlbumKey {
-				log.Debug(
+				m.debug(
 					"Ignoring stale album track response (requestKey=%s, currentAlbumKey=%s, panelMode=%s)",
 					msg.requestKey, m.currentAlbumKey, m.panelMode,
 				)
@@ -261,21 +262,21 @@ func (m *model) handleTrackBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "playlist":
 			// Ignore stale/mismatched fetches so late responses cannot overwrite the active browse list.
 			if m.panelMode != "plex-playlist-tracks" || msg.requestKey != m.currentPlaylistKey {
-				log.Debug(
+				m.debug(
 					"Ignoring stale playlist track response (requestKey=%s, currentPlaylistKey=%s, panelMode=%s)",
 					msg.requestKey, m.currentPlaylistKey, m.panelMode,
 				)
 				return m, nil
 			}
 		default:
-			log.Debug("Ignoring track response with unknown context: %s", msg.context)
+			m.debug("Ignoring track response with unknown context: %s", msg.context)
 			return m, nil
 		}
 
 		if msg.err != nil {
 			errMsg := fmt.Sprintf("Error fetching tracks: %v", msg.err)
 			m.status = errMsg
-			log.Debug("%s", errMsg)
+			m.debug("%s", errMsg)
 			return m, nil
 		}
 

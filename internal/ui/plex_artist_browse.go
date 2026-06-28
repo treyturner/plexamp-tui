@@ -27,7 +27,7 @@ type artistsFetchedMsg struct {
 
 // fetchArtistsCmd fetches artists from the Plex server
 func (m *model) fetchArtistsCmd() tea.Cmd {
-	log.Debug("Fetching artists...")
+	m.debug("Fetching artists...")
 	// ✅ Reapply sizing
 	footerHeight := 3 // or dynamically measure your footer
 	availableHeight := m.height - footerHeight - 5
@@ -38,7 +38,7 @@ func (m *model) fetchArtistsCmd() tea.Cmd {
 		}
 	}
 
-	token := plexClient.GetPlexToken()
+	token := m.deps.plexClient.GetPlexToken()
 	if token == "" {
 		return func() tea.Msg {
 			return artistsFetchedMsg{err: fmt.Errorf("no Plex token found - run with --auth flag")}
@@ -49,7 +49,7 @@ func (m *model) fetchArtistsCmd() tea.Cmd {
 	libraryID := m.config.PlexLibraryID
 
 	return func() tea.Msg {
-		artists, err := plexClient.FetchArtists(serverAddr, libraryID, token)
+		artists, err := m.deps.plexClient.FetchArtists(serverAddr, libraryID, token)
 		return artistsFetchedMsg{artists: artists, err: err}
 	}
 }
@@ -71,9 +71,10 @@ func (m *model) playArtistCmd(ratingKey string) tea.Cmd {
 	serverIP := m.selected
 	serverID := m.config.ServerID
 	shuffle := m.shuffle
+	deps := m.deps
 
 	return func() tea.Msg {
-		err := PlayMetadata(serverIP, serverID, ratingKey, shuffle)
+		err := PlayMetadata(serverIP, serverID, ratingKey, shuffle, deps)
 		if err != nil {
 			return playbackTriggeredMsg{success: false, err: err}
 		}
@@ -98,9 +99,10 @@ func (m *model) playArtistRadioCmd(ratingKey string) tea.Cmd {
 	serverIP := m.selected
 	serverID := m.config.ServerID
 	shuffle := m.shuffle
+	deps := m.deps
 
 	return func() tea.Msg {
-		err := PlayArtistRadio(serverIP, serverID, ratingKey, shuffle)
+		err := PlayArtistRadio(serverIP, serverID, ratingKey, shuffle, deps)
 		if err != nil {
 			return playbackTriggeredMsg{success: false, err: err}
 		}
@@ -110,11 +112,11 @@ func (m *model) playArtistRadioCmd(ratingKey string) tea.Cmd {
 
 // initArtistBrowse initializes the artist browse panel
 func (m *model) initArtistBrowse() {
-	log.Debug("Initializing artist browse")
+	m.debug("Initializing artist browse")
 	m.panelMode = "plex-artists"
 	m.status = "Loading artists..."
 	// Log the current model state
-	log.Debug("initArtistBrowse - panelMode: %s, status: %s", m.panelMode, m.status)
+	m.debug("initArtistBrowse - panelMode: %s, status: %s", m.panelMode, m.status)
 
 	items := []list.Item{artistItem{title: "Loading artists..."}}
 	// Create a new default delegate with custom styling
@@ -160,13 +162,13 @@ func (m *model) initArtistBrowse() {
 	if m.width > 0 && m.height > 0 {
 		m.artistList.SetSize(m.width/2-4, m.height-4)
 	}
-	log.Debug("Initialized artist list with size: %dx%d", m.width/2-4, m.height-4)
+	m.debug("Initialized artist list with size: %dx%d", m.width/2-4, m.height-4)
 }
 
 // handleArtistBrowseUpdate handles updates when in artist browse mode
 // It updates the model in place and returns the updated model and a command
 func (m *model) handleArtistBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
-	log.Debug("handleArtistBrowseUpdate received message: %T", msg)
+	m.debug("handleArtistBrowseUpdate received message: %T", msg)
 
 	// If we're in filtering mode, let the list handle the input
 	if m.artistList.FilterState() == list.Filtering {
@@ -189,7 +191,7 @@ func (m *model) handleArtistBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "enter":
 			// View selected artist's albums
 			if selected, ok := m.artistList.SelectedItem().(artistItem); ok {
-				log.Debug("Viewing artist albums: %s (ratingKey: %s)", selected.title, selected.ratingKey)
+				m.debug("Viewing artist albums: %s (ratingKey: %s)", selected.title, selected.ratingKey)
 				m.lastCommand = fmt.Sprintf("Viewing %s", selected.title)
 				m.initArtistAlbumBrowse(selected)
 				return m, m.fetchArtistAlbumsCmd(selected.ratingKey)
@@ -198,7 +200,7 @@ func (m *model) handleArtistBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "P":
 			if selected, ok := m.artistList.SelectedItem().(artistItem); ok {
-				log.Debug("Playing artist: %s (ratingKey: %s)", selected.title, selected.ratingKey)
+				m.debug("Playing artist: %s (ratingKey: %s)", selected.title, selected.ratingKey)
 				m.lastCommand = fmt.Sprintf("Playing %s", selected.title)
 				m.status = fmt.Sprintf("Starting playback for %s...", selected.title)
 				return m, m.playArtistCmd(selected.ratingKey)
@@ -209,10 +211,10 @@ func (m *model) handleArtistBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// add or remove selected artist from favorites (playback list)
 			if selected, ok := m.artistList.SelectedItem().(artistItem); ok {
 				if selected.ratingKey == "" {
-					log.Debug("Ignoring artist favorite toggle for item without rating key")
+					m.debug("Ignoring artist favorite toggle for item without rating key")
 					return m, nil
 				}
-				log.Debug("Toggling favorite for artist: %s (ratingKey: %s)", selected.title, selected.ratingKey)
+				m.debug("Toggling favorite for artist: %s (ratingKey: %s)", selected.title, selected.ratingKey)
 				m.lastCommand = fmt.Sprintf("Toggling favorite for %s", selected.title)
 				_, cmd := m.addRemoveFavorite(selected.title, selected.ratingKey, "artist")
 				selected.ToggleFavorite()
@@ -224,7 +226,7 @@ func (m *model) handleArtistBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "r": // Shift+R for artist radio
 			// Play selected artist's radio station
 			if selected, ok := m.artistList.SelectedItem().(artistItem); ok {
-				log.Debug("Playing artist radio: %s (ratingKey: %s)", selected.title, selected.ratingKey)
+				m.debug("Playing artist radio: %s (ratingKey: %s)", selected.title, selected.ratingKey)
 				m.lastCommand = fmt.Sprintf("Playing %s Radio", selected.title)
 				return m, m.playArtistRadioCmd(selected.ratingKey)
 			}
@@ -244,11 +246,11 @@ func (m *model) handleArtistBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case artistsFetchedMsg:
-		log.Debug("artistsFetchedMsg received with %d artists, error: %v", len(msg.artists), msg.err)
+		m.debug("artistsFetchedMsg received with %d artists, error: %v", len(msg.artists), msg.err)
 		if msg.err != nil {
 			errMsg := fmt.Sprintf("Error fetching artists: %v", msg.err)
 			m.status = errMsg
-			log.Debug("%s", errMsg)
+			m.debug("%s", errMsg)
 			return m, nil
 		}
 
@@ -262,7 +264,7 @@ func (m *model) handleArtistBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var items []list.Item
 		for i, artist := range msg.artists {
 			if i < 5 { // Only log first 5 artists to avoid log spam
-				log.Debug("Adding artist %d: %s (ratingKey: %s)", i+1, artist.Title, artist.RatingKey)
+				m.debug("Adding artist %d: %s (ratingKey: %s)", i+1, artist.Title, artist.RatingKey)
 			}
 
 			fav := false
@@ -279,7 +281,7 @@ func (m *model) handleArtistBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 			})
 		}
 
-		log.Debug("Creating new list with %d items", len(items))
+		m.debug("Creating new list with %d items", len(items))
 		// Create a new list with the fetched items
 		// Preserve the current filter state
 		filterState := m.artistList.FilterState()
@@ -299,7 +301,7 @@ func (m *model) handleArtistBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.artistList.FilterInput.SetValue(filterValue)
 		}
 		m.status = fmt.Sprintf("Loaded %d artists", len(msg.artists))
-		log.Debug("Updated model with new artist list. List has %d items", m.artistList.VisibleItems())
+		m.debug("Updated model with new artist list. List has %d items", m.artistList.VisibleItems())
 
 		// Force a redraw
 		return m, tea.Batch(tea.ClearScreen, func() tea.Msg { return nil })

@@ -5,24 +5,12 @@ import (
 	"testing"
 	"time"
 
-	"plexamp-tui/internal/logger"
-
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
 func initTestLogger(t *testing.T) {
 	t.Helper()
-
-	if log != nil {
-		return
-	}
-
-	l, err := logger.NewLogger(false, "")
-	if err != nil {
-		t.Fatalf("failed to init test logger: %v", err)
-	}
-	log = l
 }
 
 func TestTrackPlaybackMsgIgnoresStaleResponse(t *testing.T) {
