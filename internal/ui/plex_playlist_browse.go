@@ -80,7 +80,7 @@ func (m *model) fetchPlaylistsCmd() tea.Cmd {
 
 // initPlaylistBrowse creates a new playlist browser
 func (m *model) initPlaylistBrowse() {
-	m.panelMode = "plex-playlists"
+	m.panelMode = panelModePlexPlaylists
 	m.status = "Loading playlists..."
 
 	// Create a new default delegate with custom styling
@@ -172,7 +172,7 @@ func (m *model) handlePlaylistBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch key {
 		case "esc", "q":
 			// Return to playback panel
-			m.panelMode = "playback"
+			m.panelMode = panelModePlayback
 			m.status = ""
 			return m, nil
 
@@ -181,7 +181,7 @@ func (m *model) handlePlaylistBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if selected, ok := m.playlistList.SelectedItem().(playlistItem); ok {
 				m.debug("Viewing playlist tracks: %s (ratingKey: %s)", selected.title, selected.ratingKey)
 				m.lastCommand = fmt.Sprintf("Viewing %s", selected.title)
-				m.trackReturnMode = "plex-playlists"
+				m.trackReturnMode = panelModePlexPlaylists
 				m.initPlaylistTrackBrowse(selected.title, selected.ratingKey)
 				return m, m.fetchPlaylistTracksCmd(selected.ratingKey)
 			}
@@ -204,7 +204,7 @@ func (m *model) handlePlaylistBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				m.debug("Toggling favorite for playlist: %s (ratingKey: %s)", selected.title, selected.ratingKey)
 				m.lastCommand = fmt.Sprintf("Toggling favorite for %s", selected.title)
-				_, cmd := m.addRemoveFavorite(selected.title, selected.ratingKey, "playlist")
+				_, cmd := m.addRemoveFavorite(selected.title, selected.ratingKey, favoriteTypePlaylist)
 				selected.ToggleFavorite()
 				// Update the item in the list
 				m.playlistList.SetItem(m.playlistList.Index(), selected)

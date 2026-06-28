@@ -23,13 +23,13 @@ func (i typeItem) FilterValue() string { return string(i) }
 
 // initEditMode sets up the edit mode for either server or playback items
 // index of -1 means adding a new item
-func (m *model) initEditMode(editType string, index int) {
-	m.panelMode = "edit"
+func (m *model) initEditMode(editType editMode, index int) {
+	m.panelMode = panelModeEdit
 	m.editMode = editType
 	m.editIndex = index
 	m.editFocusIndex = 0
 
-	if editType == "playback" {
+	if editType == editModePlayback {
 		// Two inputs: name and URL
 		nameInput := textinput.New()
 		nameInput.Placeholder = "Playlist Name"
@@ -57,12 +57,12 @@ func (m *model) initEditMode(editType string, index int) {
 
 		// Set default value if editing
 		if index >= 0 && m.playbackConfig != nil && index < len(m.playbackConfig.Items) {
-			switch m.playbackConfig.Items[index].Type {
-			case "artist":
+			switch favoriteType(m.playbackConfig.Items[index].Type) {
+			case favoriteTypeArtist:
 				typeSelect.Select(0)
-			case "album":
+			case favoriteTypeAlbum:
 				typeSelect.Select(1)
-			case "playlist":
+			case favoriteTypePlaylist:
 				typeSelect.Select(2)
 			}
 		}
@@ -179,10 +179,10 @@ func (m *model) updateFocus() {
 
 // cancelEdit returns to the previous panel mode
 func (m *model) cancelEdit() {
-	if m.editMode == "server" {
-		m.panelMode = "servers"
+	if m.editMode == editModeServer {
+		m.panelMode = panelModeServers
 	} else {
-		m.panelMode = "playback"
+		m.panelMode = panelModePlayback
 	}
 	m.editInputs = nil
 }
@@ -197,15 +197,15 @@ func (m *model) savePlaybackEdit() error {
 	newMetadataKey := m.editInputs[1].Value()
 
 	// Get the selected type from the dropdown
-	var selectedType string
+	var selectedType favoriteType
 	if selectedItem, ok := m.typeSelect.SelectedItem().(typeItem); ok {
 		switch string(selectedItem) {
 		case "Artist":
-			selectedType = "artist"
+			selectedType = favoriteTypeArtist
 		case "Album":
-			selectedType = "album"
+			selectedType = favoriteTypeAlbum
 		case "Playlist":
-			selectedType = "playlist"
+			selectedType = favoriteTypePlaylist
 		}
 	}
 
@@ -221,7 +221,7 @@ func (m *model) savePlaybackEdit() error {
 
 	if err := config.FavsManager.Add(config.FavoriteItem{
 		Name:        newName,
-		Type:        selectedType,
+		Type:        string(selectedType),
 		MetadataKey: newMetadataKey,
 	}); err != nil {
 		return err
@@ -239,7 +239,7 @@ func (m *model) savePlaybackEdit() error {
 	m.playbackList.SetItems(items)
 
 	// Return to playback panel
-	m.panelMode = "playback"
+	m.panelMode = panelModePlayback
 	m.editInputs = nil
 
 	return nil
@@ -253,7 +253,7 @@ func (m model) editPanelView() string {
 		action = "Add"
 	}
 
-	if m.editMode == "playback" {
+	if m.editMode == editModePlayback {
 		// Title
 		titleStyle := lipgloss.NewStyle().Bold(true).Underline(true)
 		content += titleStyle.Render(fmt.Sprintf("%s Playback Item", action)) + "\n\n"
@@ -332,10 +332,10 @@ func (m *model) deletePlaybackItem(index int) error {
 	return nil
 }
 
-func (m *model) savePlaybackItem(name string, k string, t string) error {
-	fav := config.FavoriteItem{Name: name, Type: t, MetadataKey: k}
+func (m *model) savePlaybackItem(name string, k string, t favoriteType) error {
+	fav := config.FavoriteItem{Name: name, Type: string(t), MetadataKey: k}
 	m.playbackConfig.Items = append(m.playbackConfig.Items, fav)
-	m.playbackList.SetItems(append(m.playbackList.Items(), item{Name: name, MetadataKey: k, Type: t}))
+	m.playbackList.SetItems(append(m.playbackList.Items(), item{Name: name, MetadataKey: k, Type: string(t)}))
 
 	if err := m.deps.favsManager.Add(fav); err != nil {
 		return err

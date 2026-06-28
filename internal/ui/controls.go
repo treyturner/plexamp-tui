@@ -7,17 +7,17 @@ import tea "github.com/charmbracelet/bubbletea"
 // refreshCurrentPanel returns a command that refreshes the current panel based on the panel mode
 func (m *model) refreshCurrentPanel() tea.Cmd {
 	switch m.panelMode {
-	case "plex-artists":
+	case panelModePlexArtists:
 		return m.fetchArtistsCmd()
-	case "plex-artist-albums":
+	case panelModePlexArtistAlbums:
 		return m.fetchArtistAlbumsCmd(m.currentArtistKey)
-	case "plex-albums":
+	case panelModePlexAlbums:
 		return m.fetchAlbumsCmd()
-	case "plex-album-tracks":
+	case panelModePlexAlbumTracks:
 		return m.fetchAlbumTracksCmd(m.currentAlbumKey)
-	case "plex-playlists":
+	case panelModePlexPlaylists:
 		return m.fetchPlaylistsCmd()
-	case "plex-playlist-tracks":
+	case panelModePlexPlaylistTracks:
 		return m.fetchPlaylistTracksCmd(m.currentPlaylistKey)
 	default:
 		return nil

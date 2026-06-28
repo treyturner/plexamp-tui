@@ -67,22 +67,20 @@ type model struct {
 	ackTrackPlaybackKey     string
 	currentArtistKey        string
 	currentArtistName       string
-	artistAlbumReturnMode   string
+	artistAlbumReturnMode   panelMode
 	currentAlbumKey         string
 	currentAlbumName        string
 	currentPlaylistKey      string
 	currentPlaylistName     string
-	trackReturnMode         string
+	trackReturnMode         panelMode
 
-	// Panel mode: "servers", "playback", "edit", "plex-servers", "plex-libraries", "plex-artists",
-	// "plex-artist-albums", "plex-albums", "plex-album-tracks", "plex-playlists", "plex-playlist-tracks"
-	panelMode      string
+	panelMode      panelMode
 	playbackConfig *config.Favorites
 	config         *config.Config // Store config for server ID access
 
 	// Edit mode fields
-	editMode       string // "server" or "playback"
-	editIndex      int    // Index of item being edited
+	editMode       editMode
+	editIndex      int // Index of item being edited
 	editInputs     []textinput.Model
 	typeSelect     list.Model // Dropdown for type selection
 	editFocusIndex int
@@ -267,7 +265,7 @@ func NewUiManager(logger *logger.Logger, config *config.Config, manager *config.
 		usingDefaultCfg:   manager.UsingDefault,
 		playbackConfig:    favorites,
 		config:            config,
-		panelMode:         "playback",
+		panelMode:         panelModePlayback,
 		shuffle:           true, // Default shuffle to ON
 		plexAuthenticated: client.VerifyPlexAuthentication(),
 	}
@@ -312,7 +310,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.lastCommand = "Player Selected"
 			m.status = ""
-			m.panelMode = "playback" // Return to playback view after selection
+			m.panelMode = panelModePlayback // Return to playback view after selection
 		}
 		return m, nil
 
@@ -334,7 +332,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			found := false
 			if len(msg.libraries) == 0 {
 				m.debug("No libraries found on this server")
-				m.panelMode = "playback"
+				m.panelMode = panelModePlayback
 				m.lastCommand = "Server Selected Failed, No Libraries"
 				m.status = "No libraries found on this server"
 				return m, nil
@@ -362,7 +360,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.lastCommand = "Server Selected"
 			m.status = ""
-			m.panelMode = "playback" // Return to playback view after selection
+			m.panelMode = panelModePlayback // Return to playback view after selection
 		}
 		return m, nil
 
@@ -387,61 +385,61 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyMsg:
 		// Handle edit mode separately
-		if m.panelMode == "edit" {
+		if m.panelMode == panelModeEdit {
 			return m.handleEditUpdate(msg)
 		}
 
 		// Handle artist browse mode
-		if m.panelMode == "plex-artists" {
+		if m.panelMode == panelModePlexArtists {
 			modelPtr := &m
 			_, cmd := modelPtr.handleArtistBrowseUpdate(msg)
 			return m, cmd
 		}
 
 		// Handle album browse mode
-		if m.panelMode == "plex-albums" {
+		if m.panelMode == panelModePlexAlbums {
 			modelPtr := &m
 			_, cmd := modelPtr.handleAlbumBrowseUpdate(msg)
 			return m, cmd
 		}
 
 		// Handle artist album browse mode
-		if m.panelMode == "plex-artist-albums" {
+		if m.panelMode == panelModePlexArtistAlbums {
 			modelPtr := &m
 			_, cmd := modelPtr.handleArtistAlbumBrowseUpdate(msg)
 			return m, cmd
 		}
 
 		// Handle album/playlist track browse mode
-		if m.panelMode == "plex-album-tracks" || m.panelMode == "plex-playlist-tracks" {
+		if m.panelMode == panelModePlexAlbumTracks || m.panelMode == panelModePlexPlaylistTracks {
 			modelPtr := &m
 			_, cmd := modelPtr.handleTrackBrowseUpdate(msg)
 			return m, cmd
 		}
 
 		// Handle playlist browse mode
-		if m.panelMode == "plex-playlists" {
+		if m.panelMode == panelModePlexPlaylists {
 			modelPtr := &m
 			_, cmd := modelPtr.handlePlaylistBrowseUpdate(msg)
 			return m, cmd
 		}
 
 		// Handle server browse mode
-		if m.panelMode == "plex-servers" {
+		if m.panelMode == panelModePlexServers {
 			modelPtr := &m
 			_, cmd := modelPtr.handleServerBrowseUpdate(msg)
 			return m, cmd
 		}
 
 		// Handle player browse mode
-		if m.panelMode == "plex-players" {
+		if m.panelMode == panelModePlexPlayers {
 			modelPtr := &m
 			_, cmd := modelPtr.handlePlayerBrowseUpdate(msg)
 			return m, cmd
 		}
 
 		// Handle playback selection (when in playback/favorites mode)
-		if m.panelMode == "playback" {
+		if m.panelMode == panelModePlayback {
 			// Check if we're in filtering mode for the playback list
 			if m.playbackList.FilterState() == list.Filtering {
 				var cmd tea.Cmd
@@ -452,13 +450,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			switch msg.String() {
 			case "a":
 				// Add new playback item
-				m.initEditMode("playback", -1)
+				m.initEditMode(editModePlayback, -1)
 				return m, nil
 
 			case "e":
 				// Edit selected playback item
 				index := m.playbackList.Index()
-				m.initEditMode("playback", index)
+				m.initEditMode(editModePlayback, index)
 				return m, nil
 
 			case "d":
@@ -473,7 +471,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "r":
 				// play station/radio if selection is an artist
 				if selected, ok := m.playbackList.SelectedItem().(item); ok {
-					if pb, found := m.findFavoriteItem(selected); found && pb.Type == "artist" {
+					if pb, found := m.findFavoriteItem(selected); found && favoriteType(pb.Type) == favoriteTypeArtist {
 						return m, m.triggerFavoriteRadioPlayback(pb)
 					}
 				}
@@ -589,7 +587,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case artistsFetchedMsg:
 		// Forward the message to the artist browse handler
-		if m.panelMode == "plex-artists" {
+		if m.panelMode == panelModePlexArtists {
 			modelPtr := &m
 			_, cmd := modelPtr.handleArtistBrowseUpdate(msg)
 			return m, cmd
@@ -598,7 +596,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case albumsFetchedMsg:
 		// Forward the message to the album browse handler
-		if m.panelMode == "plex-albums" {
+		if m.panelMode == panelModePlexAlbums {
 			modelPtr := &m
 			_, cmd := modelPtr.handleAlbumBrowseUpdate(msg)
 			return m, cmd
@@ -606,7 +604,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case artistAlbumsFetchedMsg:
-		if m.panelMode == "plex-artist-albums" {
+		if m.panelMode == panelModePlexArtistAlbums {
 			modelPtr := &m
 			_, cmd := modelPtr.handleArtistAlbumBrowseUpdate(msg)
 			return m, cmd
@@ -614,7 +612,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tracksFetchedMsg:
-		if m.panelMode == "plex-album-tracks" || m.panelMode == "plex-playlist-tracks" {
+		if m.panelMode == panelModePlexAlbumTracks || m.panelMode == panelModePlexPlaylistTracks {
 			modelPtr := &m
 			_, cmd := modelPtr.handleTrackBrowseUpdate(msg)
 			return m, cmd
@@ -655,7 +653,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case playlistsFetchedMsg:
 		// Forward the message to the playlist browse handler
-		if m.panelMode == "plex-playlists" {
+		if m.panelMode == panelModePlexPlaylists {
 			modelPtr := &m
 			_, cmd := modelPtr.handlePlaylistBrowseUpdate(msg)
 			return m, cmd
@@ -664,7 +662,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case serversFetchedMsg:
 		// Forward the message to the server browse handler
-		if m.panelMode == "plex-servers" {
+		if m.panelMode == panelModePlexServers {
 			modelPtr := &m
 			_, cmd := modelPtr.handleServerBrowseUpdate(msg)
 			return m, cmd
@@ -673,7 +671,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case playersFetchedMsg:
 		// Forward the message to the player browse handler
-		if m.panelMode == "plex-players" {
+		if m.panelMode == panelModePlexPlayers {
 			modelPtr := &m
 			_, cmd := modelPtr.handlePlayerBrowseUpdate(msg)
 			return m, cmd
@@ -684,21 +682,21 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Update the appropriate list based on panel mode
 	var cmd tea.Cmd
 	switch m.panelMode {
-	case "playback":
+	case panelModePlayback:
 		m.playbackList, cmd = m.playbackList.Update(msg)
-	case "plex-artists":
+	case panelModePlexArtists:
 		m.artistList, cmd = m.artistList.Update(msg)
-	case "plex-artist-albums":
+	case panelModePlexArtistAlbums:
 		m.artistAlbumList, cmd = m.artistAlbumList.Update(msg)
-	case "plex-albums":
+	case panelModePlexAlbums:
 		m.albumList, cmd = m.albumList.Update(msg)
-	case "plex-album-tracks", "plex-playlist-tracks":
+	case panelModePlexAlbumTracks, panelModePlexPlaylistTracks:
 		m.trackList, cmd = m.trackList.Update(msg)
-	case "plex-playlists":
+	case panelModePlexPlaylists:
 		m.playlistList, cmd = m.playlistList.Update(msg)
-	case "plex-servers":
+	case panelModePlexServers:
 		m.serverList, cmd = m.serverList.Update(msg)
-	case "plex-players":
+	case panelModePlexPlayers:
 		m.playerList, cmd = m.playerList.Update(msg)
 	}
 	return m, cmd
@@ -709,7 +707,7 @@ func (m model) View() string {
 	title := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#00ffff")).Render("🎧 Plexamp Control")
 
 	// Show edit panel if in edit mode
-	if m.panelMode == "edit" {
+	if m.panelMode == panelModeEdit {
 		editContent := m.editPanelView()
 		editPanel := border.Width(m.width - 4).Render(editContent)
 		return lipgloss.JoinVertical(lipgloss.Left, title, editPanel)
@@ -718,21 +716,21 @@ func (m model) View() string {
 	// Build left panel content
 	var leftPanelContent string
 	switch m.panelMode {
-	case "playback":
+	case panelModePlayback:
 		leftPanelContent = m.playbackList.View()
-	case "plex-artists":
+	case panelModePlexArtists:
 		leftPanelContent = m.artistList.View()
-	case "plex-artist-albums":
+	case panelModePlexArtistAlbums:
 		leftPanelContent = m.artistAlbumList.View()
-	case "plex-albums":
+	case panelModePlexAlbums:
 		leftPanelContent = m.albumList.View()
-	case "plex-album-tracks", "plex-playlist-tracks":
+	case panelModePlexAlbumTracks, panelModePlexPlaylistTracks:
 		leftPanelContent = m.trackList.View()
-	case "plex-playlists":
+	case panelModePlexPlaylists:
 		leftPanelContent = m.playlistList.View()
-	case "plex-servers":
+	case panelModePlexServers:
 		leftPanelContent = m.serverList.View()
-	case "plex-players":
+	case panelModePlexPlayers:
 		leftPanelContent = m.playerList.View()
 	}
 

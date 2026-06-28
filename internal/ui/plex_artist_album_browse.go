@@ -55,7 +55,7 @@ func (m *model) fetchArtistAlbumsCmd(artistRatingKey string) tea.Cmd {
 
 func (m *model) initArtistAlbumBrowse(artist artistItem) {
 	m.artistAlbumReturnMode = m.panelMode
-	m.panelMode = "plex-artist-albums"
+	m.panelMode = panelModePlexArtistAlbums
 	m.status = fmt.Sprintf("Loading albums for %s...", artist.title)
 	m.currentArtistKey = artist.ratingKey
 	m.currentArtistName = artist.title
@@ -119,7 +119,7 @@ func (m *model) handleArtistAlbumBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) 
 			if m.artistAlbumReturnMode != "" {
 				m.panelMode = m.artistAlbumReturnMode
 			} else {
-				m.panelMode = "plex-artists"
+				m.panelMode = panelModePlexArtists
 			}
 			m.status = ""
 			return m, nil
@@ -132,7 +132,7 @@ func (m *model) handleArtistAlbumBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) 
 				}
 				m.debug("Opening album tracks: %s (ratingKey: %s)", selected.title, selected.ratingKey)
 				m.lastCommand = fmt.Sprintf("Viewing %s", selected.title)
-				m.trackReturnMode = "plex-artist-albums"
+				m.trackReturnMode = panelModePlexArtistAlbums
 				m.initAlbumTrackBrowse(selected.title, selected.ratingKey)
 				return m, m.fetchAlbumTracksCmd(selected.ratingKey)
 			}
@@ -159,7 +159,7 @@ func (m *model) handleArtistAlbumBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) 
 				m.debug("Toggling favorite for album: %s (ratingKey: %s)", selected.title, selected.ratingKey)
 				m.lastCommand = fmt.Sprintf("Toggling favorite for %s", selected.title)
 
-				_, cmd := m.addRemoveFavorite(selected.title, selected.ratingKey, "album")
+				_, cmd := m.addRemoveFavorite(selected.title, selected.ratingKey, favoriteTypeAlbum)
 				selected.ToggleFavorite()
 				m.artistAlbumList.SetItem(m.artistAlbumList.Index(), selected)
 				return m, cmd

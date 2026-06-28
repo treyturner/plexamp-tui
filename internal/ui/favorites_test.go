@@ -13,7 +13,7 @@ func TestPlaybackEnterDrillsDownToArtistAlbums(t *testing.T) {
 	initTestLogger(t)
 
 	m := model{
-		panelMode: "playback",
+		panelMode: panelModePlayback,
 		playbackList: list.New(
 			[]list.Item{item{Name: "Artist A", Type: "artist", MetadataKey: "artist-a"}},
 			list.NewDefaultDelegate(),
@@ -33,13 +33,13 @@ func TestPlaybackEnterDrillsDownToArtistAlbums(t *testing.T) {
 	}
 
 	updated := updatedModel.(model)
-	if updated.panelMode != "plex-artist-albums" {
+	if updated.panelMode != panelModePlexArtistAlbums {
 		t.Fatalf("expected panelMode plex-artist-albums, got %q", updated.panelMode)
 	}
 	if updated.currentArtistKey != "artist-a" {
 		t.Fatalf("expected currentArtistKey artist-a, got %q", updated.currentArtistKey)
 	}
-	if updated.artistAlbumReturnMode != "playback" {
+	if updated.artistAlbumReturnMode != panelModePlayback {
 		t.Fatalf("expected artistAlbumReturnMode playback, got %q", updated.artistAlbumReturnMode)
 	}
 }
@@ -48,7 +48,7 @@ func TestPlaybackEnterDrillsDownToAlbumTracks(t *testing.T) {
 	initTestLogger(t)
 
 	m := model{
-		panelMode: "playback",
+		panelMode: panelModePlayback,
 		playbackList: list.New(
 			[]list.Item{item{Name: "Album A", Type: "album", MetadataKey: "album-a"}},
 			list.NewDefaultDelegate(),
@@ -68,13 +68,13 @@ func TestPlaybackEnterDrillsDownToAlbumTracks(t *testing.T) {
 	}
 
 	updated := updatedModel.(model)
-	if updated.panelMode != "plex-album-tracks" {
+	if updated.panelMode != panelModePlexAlbumTracks {
 		t.Fatalf("expected panelMode plex-album-tracks, got %q", updated.panelMode)
 	}
 	if updated.currentAlbumKey != "album-a" {
 		t.Fatalf("expected currentAlbumKey album-a, got %q", updated.currentAlbumKey)
 	}
-	if updated.trackReturnMode != "playback" {
+	if updated.trackReturnMode != panelModePlayback {
 		t.Fatalf("expected trackReturnMode playback, got %q", updated.trackReturnMode)
 	}
 }
@@ -83,7 +83,7 @@ func TestPlaybackEnterDrillsDownToPlaylistTracks(t *testing.T) {
 	initTestLogger(t)
 
 	m := model{
-		panelMode: "playback",
+		panelMode: panelModePlayback,
 		playbackList: list.New(
 			[]list.Item{item{Name: "Playlist A", Type: "playlist", MetadataKey: "playlist-a"}},
 			list.NewDefaultDelegate(),
@@ -103,13 +103,13 @@ func TestPlaybackEnterDrillsDownToPlaylistTracks(t *testing.T) {
 	}
 
 	updated := updatedModel.(model)
-	if updated.panelMode != "plex-playlist-tracks" {
+	if updated.panelMode != panelModePlexPlaylistTracks {
 		t.Fatalf("expected panelMode plex-playlist-tracks, got %q", updated.panelMode)
 	}
 	if updated.currentPlaylistKey != "playlist-a" {
 		t.Fatalf("expected currentPlaylistKey playlist-a, got %q", updated.currentPlaylistKey)
 	}
-	if updated.trackReturnMode != "playback" {
+	if updated.trackReturnMode != panelModePlayback {
 		t.Fatalf("expected trackReturnMode playback, got %q", updated.trackReturnMode)
 	}
 }
@@ -130,7 +130,7 @@ func TestPlaybackEnterDoesNotDrillDownWhenFavoriteMetadataKeyMissing(t *testing.
 		t.Run(tt.name, func(t *testing.T) {
 			displayName := "Legacy " + tt.typ
 			m := model{
-				panelMode: "playback",
+				panelMode: panelModePlayback,
 				status:    "existing",
 				playbackList: list.New(
 					[]list.Item{item{Name: displayName, Type: tt.typ, MetadataKey: ""}},
@@ -151,7 +151,7 @@ func TestPlaybackEnterDoesNotDrillDownWhenFavoriteMetadataKeyMissing(t *testing.
 			}
 
 			updated := updatedModel.(model)
-			if updated.panelMode != "playback" {
+			if updated.panelMode != panelModePlayback {
 				t.Fatalf("expected panelMode playback, got %q", updated.panelMode)
 			}
 			expectedStatus := "Cannot open " + displayName + ": missing metadata key"
@@ -166,7 +166,7 @@ func TestPlaybackPTriggersDirectPlay(t *testing.T) {
 	initTestLogger(t)
 
 	m := model{
-		panelMode: "playback",
+		panelMode: panelModePlayback,
 		playbackList: list.New(
 			[]list.Item{item{Name: "Album A", Type: "album", MetadataKey: "album-a"}},
 			list.NewDefaultDelegate(),
@@ -188,7 +188,7 @@ func TestPlaybackPTriggersDirectPlay(t *testing.T) {
 	}
 
 	updated := updatedModel.(model)
-	if updated.panelMode != "playback" {
+	if updated.panelMode != panelModePlayback {
 		t.Fatalf("expected to remain in playback mode, got %q", updated.panelMode)
 	}
 	if updated.lastCommand != "Playing Album A" {
