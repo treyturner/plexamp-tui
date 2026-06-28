@@ -137,9 +137,7 @@ func createPlexHeaders() map[string]string {
 }
 
 // requestPlexPIN requests a new PIN from Plex for authentication
-func requestPlexPIN() (*PlexPinResponse, error) {
-	client := &http.Client{Timeout: 10 * time.Second}
-
+func requestPlexPIN(client httpDoer) (*PlexPinResponse, error) {
 	// Create the request
 	req, err := http.NewRequest("POST", PlexAPIURL+"/pins?strong=true", nil)
 	if err != nil {
@@ -174,9 +172,7 @@ func requestPlexPIN() (*PlexPinResponse, error) {
 }
 
 // checkPlexPIN checks if a PIN has been authorized
-func checkPlexPIN(pinID int) (*PlexPinResponse, error) {
-	client := &http.Client{Timeout: 10 * time.Second}
-
+func checkPlexPIN(client httpDoer, pinID int) (*PlexPinResponse, error) {
 	// Create the request
 	url := fmt.Sprintf("%s/pins/%d", PlexAPIURL, pinID)
 	req, err := http.NewRequest("GET", url, nil)
@@ -211,9 +207,7 @@ func checkPlexPIN(pinID int) (*PlexPinResponse, error) {
 }
 
 // getPlexUser fetches the current user's information
-func getPlexUser(token string) (*PlexUser, error) {
-	client := &http.Client{Timeout: 10 * time.Second}
-
+func getPlexUser(client httpDoer, token string) (*PlexUser, error) {
 	// Create the request
 	req, err := http.NewRequest("GET", "https://plex.tv/users/account", nil)
 	if err != nil {
@@ -238,19 +232,18 @@ func getPlexUser(token string) (*PlexUser, error) {
 		return nil, fmt.Errorf("failed to get user info: %s", resp.Status)
 	}
 
-	// Parse XML response
-	var user PlexUser
-	if err := xml.NewDecoder(resp.Body).Decode(&user); err != nil {
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
 		return nil, err
 	}
 
-	return &user, nil
+	return parsePlexUser(body)
 }
 
 // AuthenticateWithPlex performs the full Plex authentication flow
 func (p *PlexClient) AuthenticateWithPlex() (*PlexAuthConfig, error) {
 	// Request a PIN
-	pin, err := requestPlexPIN()
+	pin, err := requestPlexPIN(p.httpClient)
 	if err != nil {
 		return nil, fmt.Errorf("failed to request PIN: %w", err)
 	}
@@ -278,7 +271,7 @@ func (p *PlexClient) AuthenticateWithPlex() (*PlexAuthConfig, error) {
 
 		case <-ticker.C:
 			// Check if PIN has been authorized
-			updatedPin, err := checkPlexPIN(pin.ID)
+			updatedPin, err := checkPlexPIN(p.httpClient, pin.ID)
 			if err != nil {
 				continue // Keep trying
 			}
@@ -287,7 +280,7 @@ func (p *PlexClient) AuthenticateWithPlex() (*PlexAuthConfig, error) {
 				fmt.Println("\n✓ Authentication successful!")
 
 				// Get user info
-				user, err := getPlexUser(updatedPin.AuthToken)
+				user, err := getPlexUser(p.httpClient, updatedPin.AuthToken)
 				if err != nil {
 					fmt.Printf("Warning: Could not fetch user info: %v\n", err)
 				}
@@ -330,6 +323,6 @@ func (p *PlexClient) VerifyPlexAuthentication() bool {
 	}
 
 	// Try to get user info to verify token is valid
-	_, err := getPlexUser(token)
+	_, err := getPlexUser(p.httpClient, token)
 	return err == nil
 }
