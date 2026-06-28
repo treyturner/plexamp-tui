@@ -148,7 +148,7 @@ func (m *model) playAlbumCmd(ratingKey string) tea.Cmd {
 }
 
 func (m *model) handleAlbumBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
-	log.Debug(fmt.Sprintf("handleAlbumBrowseUpdate received message: %T", msg))
+	log.Debug("handleAlbumBrowseUpdate received message: %T", msg)
 
 	// If we're in filtering mode, let the list handle the input
 	if m.albumList.FilterState() == list.Filtering {
@@ -175,7 +175,7 @@ func (m *model) handleAlbumBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 					log.Debug("Ignoring album favorite toggle for item without rating key")
 					return m, nil
 				}
-				log.Debug(fmt.Sprintf("Toggling favorite for album: %s (ratingKey: %s)", selected.title, selected.ratingKey))
+				log.Debug("Toggling favorite for album: %s (ratingKey: %s)", selected.title, selected.ratingKey)
 				m.lastCommand = fmt.Sprintf("Toggling favorite for %s", selected.title)
 
 				_, cmd := m.addRemoveFavorite(selected.title, selected.ratingKey, "album")
@@ -190,7 +190,7 @@ func (m *model) handleAlbumBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "enter":
 			// View selected album's tracks
 			if selected, ok := m.albumList.SelectedItem().(albumItem); ok {
-				log.Debug(fmt.Sprintf("Viewing album tracks: %s (ratingKey: %s)", selected.title, selected.ratingKey))
+				log.Debug("Viewing album tracks: %s (ratingKey: %s)", selected.title, selected.ratingKey)
 				m.lastCommand = fmt.Sprintf("Viewing %s", selected.title)
 				m.trackReturnMode = "plex-albums"
 				m.initAlbumTrackBrowse(selected.title, selected.ratingKey)
@@ -200,7 +200,7 @@ func (m *model) handleAlbumBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "P":
 			if selected, ok := m.albumList.SelectedItem().(albumItem); ok {
-				log.Debug(fmt.Sprintf("Playing album: %s (ratingKey: %s)", selected.title, selected.ratingKey))
+				log.Debug("Playing album: %s (ratingKey: %s)", selected.title, selected.ratingKey)
 				m.lastCommand = fmt.Sprintf("Playing %s", selected.title)
 				return m, m.playAlbumCmd(selected.ratingKey)
 			}
@@ -221,11 +221,11 @@ func (m *model) handleAlbumBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case albumsFetchedMsg:
-		log.Debug(fmt.Sprintf("albumsFetchedMsg received with %d albums, error: %v", len(msg.albums), msg.err))
+		log.Debug("albumsFetchedMsg received with %d albums, error: %v", len(msg.albums), msg.err)
 		if msg.err != nil {
 			errMsg := fmt.Sprintf("Error fetching albums: %v", msg.err)
 			m.status = errMsg
-			log.Debug(errMsg)
+			log.Debug("%s", errMsg)
 			return m, nil
 		}
 
@@ -238,7 +238,7 @@ func (m *model) handleAlbumBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var items []list.Item
 		for i, album := range msg.albums {
 			if i < 5 { // Only log first 5 albums to avoid log spam
-				log.Debug(fmt.Sprintf("Adding album %d: %s (ratingKey: %s)", i+1, album.Title, album.RatingKey))
+				log.Debug("Adding album %d: %s (ratingKey: %s)", i+1, album.Title, album.RatingKey)
 			}
 
 			fav := false
@@ -258,7 +258,7 @@ func (m *model) handleAlbumBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 			})
 		}
 
-		log.Debug(fmt.Sprintf("Creating new list with %d items", len(items)))
+		log.Debug("Creating new list with %d items", len(items))
 		// Create a new list with the fetched items
 		// Preserve the current filter state
 		filterState := m.albumList.FilterState()
@@ -278,7 +278,7 @@ func (m *model) handleAlbumBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.albumList.FilterInput.SetValue(filterValue)
 		}
 		m.status = fmt.Sprintf("Loaded %d albums", len(msg.albums))
-		log.Debug(fmt.Sprintf("Updated model with new album list. List has %d items", m.albumList.VisibleItems()))
+		log.Debug("Updated model with new album list. List has %d items", m.albumList.VisibleItems())
 
 		// ✅ Reapply sizing
 		footerHeight := 3 // or dynamically measure your footer

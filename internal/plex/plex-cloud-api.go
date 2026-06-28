@@ -64,12 +64,12 @@ func (p *PlexClient) GetPlexServerInformation() ([]PlexConnectionSelection, erro
 
 	resp, err := http.Get(urlStr)
 	if err != nil {
-		p.logger.Debug(fmt.Sprintf("Request error: %v", err))
+		p.logger.Debug("Request error: %v", err)
 		return nil, fmt.Errorf("failed to connect to %s: %w", plexCloudBaseURL, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
-	p.logger.Debug(fmt.Sprintf("Response status: %d", resp.StatusCode))
+	p.logger.Debug("Response status: %d", resp.StatusCode)
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
 		return nil, fmt.Errorf("server returned status %d", resp.StatusCode)
@@ -113,12 +113,12 @@ func (p *PlexClient) GetPlexPlayers() ([]PlexConnectionSelection, error) {
 
 	resp, err := http.Get(urlStr)
 	if err != nil {
-		p.logger.Debug(fmt.Sprintf("Request error: %v", err))
+		p.logger.Debug("Request error: %v", err)
 		return nil, fmt.Errorf("failed to connect to %s: %w", plexCloudBaseURL, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
-	p.logger.Debug(fmt.Sprintf("Response status: %d", resp.StatusCode))
+	p.logger.Debug("Response status: %d", resp.StatusCode)
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
 		return nil, fmt.Errorf("server returned status %d", resp.StatusCode)

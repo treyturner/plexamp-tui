@@ -114,10 +114,10 @@ func (m *model) selectServerCmd(server serverItem) tea.Cmd {
 			serverAddr = fmt.Sprintf("%s://%s", server.scheme, serverAddr)
 		}
 		libraries, err := plexClient.FetchLibrary(serverAddr)
-		log.Debug(fmt.Sprintf("Fetched libraries: %v", libraries))
+		log.Debug("Fetched libraries: %v", libraries)
 
 		if err != nil {
-			log.Debug(fmt.Sprintf("Error fetching libraries: %v", err))
+			log.Debug("Error fetching libraries: %v", err)
 		}
 
 		// When a server is selected we will write the serverId and serverAddress:port to the config file and save it to disk
@@ -129,7 +129,7 @@ func (m *model) selectServerCmd(server serverItem) tea.Cmd {
 }
 
 func (m *model) handleServerBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
-	log.Debug(fmt.Sprintf("handleServerBrowseUpdate received message: %T", msg))
+	log.Debug("handleServerBrowseUpdate received message: %T", msg)
 
 	// If we're in filtering mode, let the list handle the input
 	if m.serverList.FilterState() == list.Filtering {
@@ -152,7 +152,7 @@ func (m *model) handleServerBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "enter":
 			// Select Server
 			if selected, ok := m.serverList.SelectedItem().(serverItem); ok {
-				log.Debug(fmt.Sprintf("Selecting server: %s (clientIdentifier: %s)", selected.title, selected.clientIdentifier))
+				log.Debug("Selecting server: %s (clientIdentifier: %s)", selected.title, selected.clientIdentifier)
 				m.lastCommand = fmt.Sprintf("Selecting %s", selected.title)
 				return m, m.selectServerCmd(selected)
 			}
@@ -172,11 +172,11 @@ func (m *model) handleServerBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case serversFetchedMsg:
-		log.Debug(fmt.Sprintf("serversFetchedMsg received with %d servers, error: %v", len(msg.servers), msg.err))
+		log.Debug("serversFetchedMsg received with %d servers, error: %v", len(msg.servers), msg.err)
 		if msg.err != nil {
 			errMsg := fmt.Sprintf("Error fetching servers: %v", msg.err)
 			m.status = errMsg
-			log.Debug(errMsg)
+			log.Debug("%s", errMsg)
 			return m, nil
 		}
 
@@ -184,7 +184,7 @@ func (m *model) handleServerBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var items []list.Item
 		for i, server := range msg.servers {
 			if i < 5 { // Only log first 5 servers to avoid log spam
-				log.Debug(fmt.Sprintf("Adding server %d: %s (ratingKey: %s)", i+1, server.Name, server.ClientIdentifier))
+				log.Debug("Adding server %d: %s (ratingKey: %s)", i+1, server.Name, server.ClientIdentifier)
 			}
 			items = append(items, serverItem{
 				title:            server.Name,
@@ -196,7 +196,7 @@ func (m *model) handleServerBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 			})
 		}
 
-		log.Debug(fmt.Sprintf("Creating new list with %d items", len(items)))
+		log.Debug("Creating new list with %d items", len(items))
 		// Create a new list with the fetched items
 		// Preserve the current filter state
 		filterState := m.serverList.FilterState()
@@ -216,7 +216,7 @@ func (m *model) handleServerBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.serverList.FilterInput.SetValue(filterValue)
 		}
 		m.status = fmt.Sprintf("Loaded %d servers", len(msg.servers))
-		log.Debug(fmt.Sprintf("Updated model with new server list. List has %d items", m.serverList.VisibleItems()))
+		log.Debug("Updated model with new server list. List has %d items", m.serverList.VisibleItems())
 
 		// Force a redraw
 		return m, tea.Batch(tea.ClearScreen, func() tea.Msg { return nil })

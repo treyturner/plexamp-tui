@@ -17,10 +17,9 @@ import (
 
 // Replace the Config struct and related functions with:
 var (
-	log         *logger.Logger
-	cfgManager  *config.Manager
-	favsManager *config.FavoritesManager
-	plexClient  *plex.PlexClient
+	log        *logger.Logger
+	cfgManager *config.Manager
+	plexClient *plex.PlexClient
 )
 
 // =====================
@@ -53,7 +52,7 @@ func main() {
 		fmt.Println("Error initializing logger:", err)
 		os.Exit(1)
 	}
-	defer log.Close()
+	defer func() { _ = log.Close() }()
 
 	plexClient = plex.NewPlexClient(log)
 
@@ -75,7 +74,7 @@ func main() {
 	if err != nil {
 		log.Fatal("Failed to initialize database: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Initialize favorites manager
 	favsManager, err := config.NewFavoritesManager(db)
@@ -103,8 +102,8 @@ func main() {
 
 	serverInfo, err := plexClient.GetPlexServerInformation()
 	if err != nil {
-		log.Debug(fmt.Sprintf("Error getting server information: %v", err))
+		log.Debug("Error getting server information: %v", err)
 		os.Exit(1)
 	}
-	log.Debug(fmt.Sprintf("Server information: %v", serverInfo))
+	log.Debug("Server information: %v", serverInfo)
 }

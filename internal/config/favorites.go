@@ -68,7 +68,7 @@ func (fm *FavoritesManager) List() ([]FavoriteItem, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var items []FavoriteItem
 	for rows.Next() {
@@ -131,7 +131,7 @@ func (fm *FavoritesManager) MigrateFromJSON(jsonPath string) error {
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	stmt, err := tx.Prepare(`
 		INSERT INTO favorites (name, type, metadata_key, created_at)
@@ -140,7 +140,7 @@ func (fm *FavoritesManager) MigrateFromJSON(jsonPath string) error {
 	if err != nil {
 		return err
 	}
-	defer stmt.Close()
+	defer func() { _ = stmt.Close() }()
 
 	for _, item := range favs.Items {
 		if _, err := stmt.Exec(item.Name, item.Type, item.MetadataKey, time.Now()); err != nil {

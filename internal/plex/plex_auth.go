@@ -157,7 +157,7 @@ func requestPlexPIN() (*PlexPinResponse, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusCreated {
 		body, _ := io.ReadAll(resp.Body)
@@ -195,7 +195,7 @@ func checkPlexPIN(pinID int) (*PlexPinResponse, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("failed to check PIN: %s", resp.Status)
@@ -232,7 +232,7 @@ func getPlexUser(token string) (*PlexUser, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("failed to get user info: %s", resp.Status)
@@ -311,15 +311,6 @@ func (p *PlexClient) AuthenticateWithPlex() (*PlexAuthConfig, error) {
 			}
 		}
 	}
-}
-
-// isPlexAuthenticated checks if we have a valid Plex token
-func isPlexAuthenticated() bool {
-	config, err := loadPlexAuthConfig()
-	if err != nil || config == nil || config.Token == "" {
-		return false
-	}
-	return true
 }
 
 // GetPlexToken returns the stored Plex token, or empty string if not authenticated
