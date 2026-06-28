@@ -46,7 +46,7 @@ func TestTrackBrowseEnterIgnoresItemWithoutRatingKey(t *testing.T) {
 	initTestLogger(t)
 
 	m := model{
-		panelMode:          "plex-album-tracks",
+		panelMode:          panelModePlexAlbumTracks,
 		status:             "Loading tracks for Album A...",
 		trackPlaybackReqID: 4,
 		trackList:          list.New([]list.Item{trackItem{title: "Loading tracks..."}}, list.NewDefaultDelegate(), 0, 0),

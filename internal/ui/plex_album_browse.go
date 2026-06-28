@@ -75,7 +75,7 @@ func (m *model) fetchAlbumsCmd() tea.Cmd {
 
 // initAlbumBrowse creates a new album browser
 func (m *model) initAlbumBrowse() {
-	m.panelMode = "plex-albums"
+	m.panelMode = panelModePlexAlbums
 	m.status = "Loading albums..."
 
 	// Create a new default delegate with custom styling
@@ -166,7 +166,7 @@ func (m *model) handleAlbumBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch key {
 		case "esc", "q":
 			// Return to playback panel
-			m.panelMode = "playback"
+			m.panelMode = panelModePlayback
 			m.status = ""
 			return m, nil
 
@@ -180,7 +180,7 @@ func (m *model) handleAlbumBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.debug("Toggling favorite for album: %s (ratingKey: %s)", selected.title, selected.ratingKey)
 				m.lastCommand = fmt.Sprintf("Toggling favorite for %s", selected.title)
 
-				_, cmd := m.addRemoveFavorite(selected.title, selected.ratingKey, "album")
+				_, cmd := m.addRemoveFavorite(selected.title, selected.ratingKey, favoriteTypeAlbum)
 				selected.ToggleFavorite()
 
 				// Update the item in the list
@@ -194,7 +194,7 @@ func (m *model) handleAlbumBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if selected, ok := m.albumList.SelectedItem().(albumItem); ok {
 				m.debug("Viewing album tracks: %s (ratingKey: %s)", selected.title, selected.ratingKey)
 				m.lastCommand = fmt.Sprintf("Viewing %s", selected.title)
-				m.trackReturnMode = "plex-albums"
+				m.trackReturnMode = panelModePlexAlbums
 				m.initAlbumTrackBrowse(selected.title, selected.ratingKey)
 				return m, m.fetchAlbumTracksCmd(selected.ratingKey)
 			}

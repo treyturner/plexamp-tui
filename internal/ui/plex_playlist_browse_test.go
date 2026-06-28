@@ -11,7 +11,7 @@ func TestPlaylistBrowseFavoriteIgnoresItemWithoutRatingKey(t *testing.T) {
 	initTestLogger(t)
 
 	m := model{
-		panelMode:    "plex-playlists",
+		panelMode:    panelModePlexPlaylists,
 		status:       "Loading playlists...",
 		lastCommand:  "existing",
 		playlistList: list.New([]list.Item{playlistItem{title: "Loading playlists..."}}, list.NewDefaultDelegate(), 0, 0),
@@ -24,7 +24,7 @@ func TestPlaylistBrowseFavoriteIgnoresItemWithoutRatingKey(t *testing.T) {
 	}
 
 	updated := updatedModel.(*model)
-	if updated.panelMode != "plex-playlists" {
+	if updated.panelMode != panelModePlexPlaylists {
 		t.Fatalf("expected panelMode to stay on playlists, got %q", updated.panelMode)
 	}
 	if updated.lastCommand != "existing" {

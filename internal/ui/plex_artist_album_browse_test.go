@@ -13,7 +13,7 @@ func TestArtistAlbumsFetchedMsgIgnoresStaleResponse(t *testing.T) {
 	initTestLogger(t)
 
 	m := model{
-		panelMode:        "plex-artist-albums",
+		panelMode:        panelModePlexArtistAlbums,
 		currentArtistKey: "artist-b",
 		status:           "existing",
 		artistAlbumList: list.New(
@@ -69,7 +69,7 @@ func TestArtistAlbumsFetchedMsgAppliesMatchingResponse(t *testing.T) {
 	initTestLogger(t)
 
 	m := model{
-		panelMode:        "plex-artist-albums",
+		panelMode:        panelModePlexArtistAlbums,
 		currentArtistKey: "artist-b",
 		artistAlbumList:  list.New([]list.Item{}, list.NewDefaultDelegate(), 0, 0),
 		playbackList:     list.New([]list.Item{}, list.NewDefaultDelegate(), 0, 0),
@@ -109,8 +109,8 @@ func TestArtistAlbumBrowseEscReturnsToOriginPanel(t *testing.T) {
 	initTestLogger(t)
 
 	m := model{
-		panelMode:             "plex-artist-albums",
-		artistAlbumReturnMode: "playback",
+		panelMode:             panelModePlexArtistAlbums,
+		artistAlbumReturnMode: panelModePlayback,
 		artistAlbumList:       list.New([]list.Item{}, list.NewDefaultDelegate(), 0, 0),
 	}
 
@@ -120,7 +120,7 @@ func TestArtistAlbumBrowseEscReturnsToOriginPanel(t *testing.T) {
 	}
 
 	updated := updatedModel.(*model)
-	if updated.panelMode != "playback" {
+	if updated.panelMode != panelModePlayback {
 		t.Fatalf("expected panelMode playback, got %q", updated.panelMode)
 	}
 }
@@ -128,16 +128,16 @@ func TestArtistAlbumBrowseEscReturnsToOriginPanel(t *testing.T) {
 func TestInitArtistAlbumBrowseCapturesCurrentPanelAsReturnMode(t *testing.T) {
 	initTestLogger(t)
 
-	m := model{panelMode: "playback"}
+	m := model{panelMode: panelModePlayback}
 	m.initArtistAlbumBrowse(artistItem{
 		title:     "Artist A",
 		ratingKey: "artist-a",
 	})
 
-	if m.panelMode != "plex-artist-albums" {
+	if m.panelMode != panelModePlexArtistAlbums {
 		t.Fatalf("expected panelMode plex-artist-albums, got %q", m.panelMode)
 	}
-	if m.artistAlbumReturnMode != "playback" {
+	if m.artistAlbumReturnMode != panelModePlayback {
 		t.Fatalf("expected artistAlbumReturnMode playback, got %q", m.artistAlbumReturnMode)
 	}
 }
@@ -146,7 +146,7 @@ func TestArtistAlbumBrowseEnterIgnoresItemWithoutRatingKey(t *testing.T) {
 	initTestLogger(t)
 
 	m := model{
-		panelMode:       "plex-artist-albums",
+		panelMode:       panelModePlexArtistAlbums,
 		status:          "Loading albums for Artist A...",
 		artistAlbumList: list.New([]list.Item{albumItem{title: "Loading albums..."}}, list.NewDefaultDelegate(), 0, 0),
 	}
@@ -157,7 +157,7 @@ func TestArtistAlbumBrowseEnterIgnoresItemWithoutRatingKey(t *testing.T) {
 	}
 
 	updated := updatedModel.(*model)
-	if updated.panelMode != "plex-artist-albums" {
+	if updated.panelMode != panelModePlexArtistAlbums {
 		t.Fatalf("expected panelMode to stay on artist albums, got %q", updated.panelMode)
 	}
 	if updated.trackReturnMode != "" {
@@ -172,7 +172,7 @@ func TestArtistAlbumBrowsePlayIgnoresItemWithoutRatingKey(t *testing.T) {
 	initTestLogger(t)
 
 	m := model{
-		panelMode:       "plex-artist-albums",
+		panelMode:       panelModePlexArtistAlbums,
 		status:          "Loading albums for Artist A...",
 		lastCommand:     "existing",
 		artistAlbumList: list.New([]list.Item{albumItem{title: "Loading albums..."}}, list.NewDefaultDelegate(), 0, 0),
@@ -184,7 +184,7 @@ func TestArtistAlbumBrowsePlayIgnoresItemWithoutRatingKey(t *testing.T) {
 	}
 
 	updated := updatedModel.(*model)
-	if updated.panelMode != "plex-artist-albums" {
+	if updated.panelMode != panelModePlexArtistAlbums {
 		t.Fatalf("expected panelMode to stay on artist albums, got %q", updated.panelMode)
 	}
 	if updated.lastCommand != "existing" {
@@ -196,7 +196,7 @@ func TestArtistAlbumBrowseFavoriteIgnoresItemWithoutRatingKey(t *testing.T) {
 	initTestLogger(t)
 
 	m := model{
-		panelMode:       "plex-artist-albums",
+		panelMode:       panelModePlexArtistAlbums,
 		status:          "Loading albums for Artist A...",
 		lastCommand:     "existing",
 		artistAlbumList: list.New([]list.Item{albumItem{title: "Loading albums..."}}, list.NewDefaultDelegate(), 0, 0),
@@ -209,7 +209,7 @@ func TestArtistAlbumBrowseFavoriteIgnoresItemWithoutRatingKey(t *testing.T) {
 	}
 
 	updated := updatedModel.(*model)
-	if updated.panelMode != "plex-artist-albums" {
+	if updated.panelMode != panelModePlexArtistAlbums {
 		t.Fatalf("expected panelMode to stay on artist albums, got %q", updated.panelMode)
 	}
 	if updated.lastCommand != "existing" {

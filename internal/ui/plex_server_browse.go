@@ -73,7 +73,7 @@ func (m *model) fetchServersCmd() tea.Cmd {
 
 // initServerBrowse creates a new server browser
 func (m *model) initServerBrowse() {
-	m.panelMode = "plex-servers"
+	m.panelMode = panelModePlexServers
 	m.status = "Loading servers..."
 
 	// Create a new default delegate with custom styling
@@ -145,7 +145,7 @@ func (m *model) handleServerBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch key {
 		case "esc", "q":
 			// Return to playback panel
-			m.panelMode = "playback"
+			m.panelMode = panelModePlayback
 			m.status = ""
 			return m, nil
 

@@ -115,7 +115,7 @@ func (m *model) playArtistRadioCmd(ratingKey string) tea.Cmd {
 // initArtistBrowse initializes the artist browse panel
 func (m *model) initArtistBrowse() {
 	m.debug("Initializing artist browse")
-	m.panelMode = "plex-artists"
+	m.panelMode = panelModePlexArtists
 	m.status = "Loading artists..."
 	// Log the current model state
 	m.debug("initArtistBrowse - panelMode: %s, status: %s", m.panelMode, m.status)
@@ -186,7 +186,7 @@ func (m *model) handleArtistBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch key {
 		case "esc", "q":
 			// Return to playback panel
-			m.panelMode = "playback"
+			m.panelMode = panelModePlayback
 			m.status = ""
 			return m, nil
 
@@ -218,7 +218,7 @@ func (m *model) handleArtistBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				m.debug("Toggling favorite for artist: %s (ratingKey: %s)", selected.title, selected.ratingKey)
 				m.lastCommand = fmt.Sprintf("Toggling favorite for %s", selected.title)
-				_, cmd := m.addRemoveFavorite(selected.title, selected.ratingKey, "artist")
+				_, cmd := m.addRemoveFavorite(selected.title, selected.ratingKey, favoriteTypeArtist)
 				selected.ToggleFavorite()
 				// Update the item in the list
 				m.artistList.SetItem(m.artistList.Index(), selected)

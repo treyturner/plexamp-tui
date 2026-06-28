@@ -11,7 +11,7 @@ import (
 
 type tracksFetchedMsg struct {
 	tracks     []plex.PlexTrack
-	context    string
+	context    trackBrowseContext
 	requestKey string
 	err        error
 }
@@ -35,7 +35,7 @@ func (i trackItem) Description() string { return "" }
 func (i trackItem) FilterValue() string { return i.filter }
 
 func (m *model) initAlbumTrackBrowse(albumTitle, albumRatingKey string) {
-	m.panelMode = "plex-album-tracks"
+	m.panelMode = panelModePlexAlbumTracks
 	m.status = fmt.Sprintf("Loading tracks for %s...", albumTitle)
 	m.currentAlbumKey = albumRatingKey
 	m.currentAlbumName = albumTitle
@@ -58,7 +58,7 @@ func (m *model) initAlbumTrackBrowse(albumTitle, albumRatingKey string) {
 }
 
 func (m *model) initPlaylistTrackBrowse(playlistTitle, playlistRatingKey string) {
-	m.panelMode = "plex-playlist-tracks"
+	m.panelMode = panelModePlexPlaylistTracks
 	m.status = fmt.Sprintf("Loading tracks for %s...", playlistTitle)
 	m.currentPlaylistKey = playlistRatingKey
 	m.currentPlaylistName = playlistTitle
@@ -89,7 +89,7 @@ func (m *model) fetchAlbumTracksCmd(albumRatingKey string) tea.Cmd {
 	if m.config == nil {
 		return func() tea.Msg {
 			return tracksFetchedMsg{
-				context:    "album",
+				context:    trackBrowseContextAlbum,
 				requestKey: albumRatingKey,
 				err:        fmt.Errorf("no config available"),
 			}
@@ -100,7 +100,7 @@ func (m *model) fetchAlbumTracksCmd(albumRatingKey string) tea.Cmd {
 	if token == "" {
 		return func() tea.Msg {
 			return tracksFetchedMsg{
-				context:    "album",
+				context:    trackBrowseContextAlbum,
 				requestKey: albumRatingKey,
 				err:        fmt.Errorf("no Plex token found - run with --auth flag"),
 			}
@@ -112,7 +112,7 @@ func (m *model) fetchAlbumTracksCmd(albumRatingKey string) tea.Cmd {
 		tracks, err := m.deps.plexClient.FetchAlbumTracks(serverAddr, albumRatingKey, token)
 		return tracksFetchedMsg{
 			tracks:     tracks,
-			context:    "album",
+			context:    trackBrowseContextAlbum,
 			requestKey: albumRatingKey,
 			err:        err,
 		}
@@ -128,7 +128,7 @@ func (m *model) fetchPlaylistTracksCmd(playlistRatingKey string) tea.Cmd {
 	if m.config == nil {
 		return func() tea.Msg {
 			return tracksFetchedMsg{
-				context:    "playlist",
+				context:    trackBrowseContextPlaylist,
 				requestKey: playlistRatingKey,
 				err:        fmt.Errorf("no config available"),
 			}
@@ -139,7 +139,7 @@ func (m *model) fetchPlaylistTracksCmd(playlistRatingKey string) tea.Cmd {
 	if token == "" {
 		return func() tea.Msg {
 			return tracksFetchedMsg{
-				context:    "playlist",
+				context:    trackBrowseContextPlaylist,
 				requestKey: playlistRatingKey,
 				err:        fmt.Errorf("no Plex token found - run with --auth flag"),
 			}
@@ -151,7 +151,7 @@ func (m *model) fetchPlaylistTracksCmd(playlistRatingKey string) tea.Cmd {
 		tracks, err := m.deps.plexClient.FetchPlaylistTracks(serverAddr, playlistRatingKey, token)
 		return tracksFetchedMsg{
 			tracks:     tracks,
-			context:    "playlist",
+			context:    trackBrowseContextPlaylist,
 			requestKey: playlistRatingKey,
 			err:        err,
 		}
@@ -252,18 +252,18 @@ func (m *model) handleTrackBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		)
 
 		switch msg.context {
-		case "album":
+		case trackBrowseContextAlbum:
 			// Ignore stale/mismatched fetches so late responses cannot overwrite the active browse list.
-			if m.panelMode != "plex-album-tracks" || msg.requestKey != m.currentAlbumKey {
+			if m.panelMode != panelModePlexAlbumTracks || msg.requestKey != m.currentAlbumKey {
 				m.debug(
 					"Ignoring stale album track response (requestKey=%s, currentAlbumKey=%s, panelMode=%s)",
 					msg.requestKey, m.currentAlbumKey, m.panelMode,
 				)
 				return m, nil
 			}
-		case "playlist":
+		case trackBrowseContextPlaylist:
 			// Ignore stale/mismatched fetches so late responses cannot overwrite the active browse list.
-			if m.panelMode != "plex-playlist-tracks" || msg.requestKey != m.currentPlaylistKey {
+			if m.panelMode != panelModePlexPlaylistTracks || msg.requestKey != m.currentPlaylistKey {
 				m.debug(
 					"Ignoring stale playlist track response (requestKey=%s, currentPlaylistKey=%s, panelMode=%s)",
 					msg.requestKey, m.currentPlaylistKey, m.panelMode,
@@ -286,7 +286,7 @@ func (m *model) handleTrackBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		for _, track := range msg.tracks {
 			display := track.Title
 			filter := track.Title
-			if msg.context == "album" && track.Index > 0 {
+			if msg.context == trackBrowseContextAlbum && track.Index > 0 {
 				display = fmt.Sprintf("%02d. %s", track.Index, track.Title)
 				filter = fmt.Sprintf("%02d %s", track.Index, track.Title)
 			} else if track.GrandparentTitle != "" {

@@ -11,7 +11,7 @@ func TestArtistPlayKeyUpdatesStatusImmediately(t *testing.T) {
 	initTestLogger(t)
 
 	m := model{
-		panelMode: "plex-artists",
+		panelMode: panelModePlexArtists,
 		artistList: list.New(
 			[]list.Item{
 				artistItem{
@@ -45,7 +45,7 @@ func TestArtistBrowseFavoriteIgnoresItemWithoutRatingKey(t *testing.T) {
 	initTestLogger(t)
 
 	m := model{
-		panelMode:    "plex-artists",
+		panelMode:    panelModePlexArtists,
 		status:       "Loading artists...",
 		lastCommand:  "existing",
 		artistList:   list.New([]list.Item{artistItem{title: "Loading artists..."}}, list.NewDefaultDelegate(), 0, 0),
@@ -58,7 +58,7 @@ func TestArtistBrowseFavoriteIgnoresItemWithoutRatingKey(t *testing.T) {
 	}
 
 	updated := updatedModel.(*model)
-	if updated.panelMode != "plex-artists" {
+	if updated.panelMode != panelModePlexArtists {
 		t.Fatalf("expected panelMode to stay on artists, got %q", updated.panelMode)
 	}
 	if updated.lastCommand != "existing" {

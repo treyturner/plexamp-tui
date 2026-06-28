@@ -70,7 +70,7 @@ func (m *model) fetchPlayersCmd() tea.Cmd {
 
 // initPlayerBrowse creates a new player browser
 func (m *model) initPlayerBrowse() {
-	m.panelMode = "plex-players"
+	m.panelMode = panelModePlexPlayers
 	m.status = "Loading players..."
 
 	// Create a new default delegate with custom styling
@@ -124,7 +124,7 @@ func (m *model) handlePlayerBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch key {
 		case "esc", "q":
 			// Return to playback panel
-			m.panelMode = "playback"
+			m.panelMode = panelModePlayback
 			m.status = ""
 			return m, nil
 
