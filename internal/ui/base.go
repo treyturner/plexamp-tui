@@ -184,9 +184,7 @@ func NewUiManager(logger *logger.Logger, config *config.Config, manager *config.
 	// Create playback list
 	var playbackItems []list.Item
 	if favorites != nil {
-		for _, pb := range favorites.Items {
-			playbackItems = append(playbackItems, item{Name: pb.Name, Type: pb.Type, MetadataKey: pb.MetadataKey})
-		}
+		playbackItems = favoriteListItems(favorites.Items)
 	}
 	playbackList := list.New(playbackItems, list.NewDefaultDelegate(), 0, 0)
 	playbackList.Title = "Favorites"

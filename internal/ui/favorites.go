@@ -66,22 +66,7 @@ func (m *model) triggerFavoritePlayback(item config.FavoriteItem) tea.Cmd {
 }
 
 func (m *model) findFavoriteItem(selected item) (config.FavoriteItem, bool) {
-	if m.playbackConfig == nil {
-		return config.FavoriteItem{}, false
-	}
-
-	// Primary match: metadata key + type, fallback by name+type for legacy entries.
-	for _, pb := range m.playbackConfig.Items {
-		if pb.MetadataKey != "" && pb.MetadataKey == selected.MetadataKey && pb.Type == selected.Type {
-			return pb, true
-		}
-	}
-	for _, pb := range m.playbackConfig.Items {
-		if pb.Name == string(selected.Name) && pb.Type == selected.Type {
-			return pb, true
-		}
-	}
-	return config.FavoriteItem{}, false
+	return m.favoritesController().findSelected(selected)
 }
 
 func (m *model) openFavoriteItem(item config.FavoriteItem) tea.Cmd {
@@ -117,30 +102,16 @@ func (m *model) openFavoriteItem(item config.FavoriteItem) tea.Cmd {
 
 func (m *model) addRemoveFavorite(name string, k string, t favoriteType) (tea.Model, tea.Cmd) {
 	m.debug("Toggling favorite for %s", name)
-	favSet := m.getCurrentFavSet()
-	if _, exists := favSet[k]; exists {
-		m.debug("Removing favorite: %s", name)
-		// Delete selected playback item
-		index := m.playbackList.Index()
-		if err := m.deletePlaybackItem(index); err != nil {
-			m.status = "Error removing favorite: " + err.Error()
-			m.lastCommand = "Favorite Remove Failed"
-		}
+	added, err := m.favoritesController().toggle(name, k, t)
+	if err != nil {
+		m.status = "Error toggling favorite: " + err.Error()
+		m.lastCommand = "Favorite Toggle Failed"
 		return m, nil
 	}
-	m.debug("Adding favorite: %s", name)
-	if err := m.savePlaybackItem(name, k, t); err != nil {
-		m.status = "Error adding favorite: " + err.Error()
-		m.lastCommand = "Favorite Add Failed"
+	if added {
+		m.debug("Added favorite: %s", name)
+	} else {
+		m.debug("Removed favorite: %s", name)
 	}
 	return m, nil
-}
-
-func (m *model) getCurrentFavSet() map[string]struct{} {
-	favSet := make(map[string]struct{})
-	for _, pItem := range m.playbackList.Items() {
-		pItem := pItem.(item)
-		favSet[pItem.GetMetadataKey()] = struct{}{}
-	}
-	return favSet
 }

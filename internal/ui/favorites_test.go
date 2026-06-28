@@ -162,6 +162,40 @@ func TestPlaybackEnterDoesNotDrillDownWhenFavoriteMetadataKeyMissing(t *testing.
 	}
 }
 
+func TestFavoriteToggleRemovesMatchingFavoriteByTypeAndKey(t *testing.T) {
+	favorites := []config.FavoriteItem{
+		{Name: "Artist A", Type: "artist", MetadataKey: "artist-a"},
+		{Name: "Album B", Type: "album", MetadataKey: "album-b"},
+	}
+	m := model{
+		playbackConfig: &config.Favorites{Items: favorites},
+		playbackList:   list.New(favoriteListItems(favorites), list.NewDefaultDelegate(), 0, 0),
+	}
+
+	updatedModel, cmd := m.addRemoveFavorite("Album B", "album-b", favoriteTypeAlbum)
+	if cmd != nil {
+		t.Fatalf("expected nil command for favorite toggle, got non-nil")
+	}
+
+	updated := updatedModel.(*model)
+	if len(updated.playbackConfig.Items) != 1 {
+		t.Fatalf("expected one remaining favorite, got %d", len(updated.playbackConfig.Items))
+	}
+	if updated.playbackConfig.Items[0].MetadataKey != "artist-a" {
+		t.Fatalf("expected artist favorite to remain, got %#v", updated.playbackConfig.Items[0])
+	}
+	if len(updated.playbackList.Items()) != 1 {
+		t.Fatalf("expected playback list to have one item, got %d", len(updated.playbackList.Items()))
+	}
+	remaining, ok := updated.playbackList.Items()[0].(item)
+	if !ok {
+		t.Fatalf("expected remaining playback item, got %T", updated.playbackList.Items()[0])
+	}
+	if remaining.MetadataKey != "artist-a" {
+		t.Fatalf("expected artist playback item to remain, got %#v", remaining)
+	}
+}
+
 func TestPlaybackPTriggersDirectPlay(t *testing.T) {
 	initTestLogger(t)
 
