@@ -13,18 +13,18 @@ func (m model) playbackStatusView() string {
 	value := lipgloss.NewStyle().Foreground(lipgloss.Color("#00ffcc")).Bold(true)
 
 	state := "⏸️ Paused"
-	if m.isPlaying {
+	if m.playback.isPlaying {
 		state = "▶️ Playing"
 	}
 
 	current := "None"
-	if m.currentTrack != "" {
-		current = m.currentTrack
+	if m.playback.currentTrack != "" {
+		current = m.playback.currentTrack
 	}
 
 	elapsed := m.currentPosition()
-	progress := formatTime(elapsed) + " / " + formatTime(m.durationMs)
-	bar := progressBar(elapsed, m.durationMs, 20)
+	progress := formatTime(elapsed) + " / " + formatTime(m.playback.durationMs)
+	bar := progressBar(elapsed, m.playback.durationMs, 20)
 
 	body := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#ffaa00")).Render("Now Playing") + "\n\n"
 	body += fmt.Sprintf(
@@ -32,7 +32,7 @@ func (m model) playbackStatusView() string {
 		info.Render("State"), value.Render(state),
 		info.Render("Track"), value.Render(current),
 		info.Render("Progress"), value.Render(bar+"  "+progress),
-		info.Render("Volume"), m.volume,
+		info.Render("Volume"), m.playback.volume,
 	)
 
 	return body
@@ -44,13 +44,13 @@ func (m model) playbackStatusView() string {
 
 // togglePlayback toggles between play and pause
 func (m *model) togglePlayback() tea.Cmd {
-	if m.isPlaying {
+	if m.playback.isPlaying {
 		m.sendCommand("playback/pause")
-		m.isPlaying = false
+		m.playback.isPlaying = false
 		m.lastCommand = "Pause"
 	} else {
 		m.sendCommand("playback/play")
-		m.isPlaying = true
+		m.playback.isPlaying = true
 		m.lastCommand = "Play"
 	}
 	return m.pollTimeline()
@@ -67,10 +67,7 @@ func (m *model) nextTrack() tea.Cmd {
 func (m *model) previousTrack() tea.Cmd {
 	// "Previous" acts as restart when we're past the rewind threshold; reset UI immediately
 	// and invalidate any in-flight poll responses captured before this command.
-	m.positionMs = 0
-	m.lastUpdate = time.Now()
-	m.suppressTimeline = false
-	m.timelineRequestID++
+	m.playback.restartPrevious(time.Now())
 
 	m.sendCommand("playback/skipPrevious")
 	m.lastCommand = "Previous"
@@ -79,7 +76,7 @@ func (m *model) previousTrack() tea.Cmd {
 
 // adjustVolume changes the volume by the specified delta (range: -100 to +100)
 func (m *model) adjustVolume(delta int) tea.Cmd {
-	newVol := m.volume + delta
+	newVol := m.playback.volume + delta
 	if newVol < 0 {
 		newVol = 0
 	} else if newVol > 100 {

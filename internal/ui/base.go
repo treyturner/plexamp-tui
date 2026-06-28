@@ -49,25 +49,12 @@ type model struct {
 	status                string
 	width                 int
 	height                int
-	isPlaying             bool
+	playback              playbackState
 	lastCommand           string
-	currentTrack          string
-	currentTrackKey       string
-	volume                int
-	durationMs            int
-	positionMs            int
-	lastUpdate            time.Time
-	suppressTimeline      bool
 	usingDefaultCfg       bool
 	shuffle               bool // Tracks shuffle state
 	plexAuthenticated     bool // Plex authentication status
-	timelineRequestID     int
 	trackPlaybackReqID    int
-	pendingTrackKey       string
-	pendingTrackUntil     time.Time
-	ignoreTrackKey        string
-	ignoreTrackPosMs      int
-	ignoreTrackUntil      time.Time
 	currentArtistKey      string
 	currentArtistName     string
 	artistAlbumReturnMode string
@@ -488,86 +475,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(m.pollTimeline(), tick())
 
 	case trackMsgWithState:
-		// Discard if this response is stale
-		if msg.RequestID != m.timelineRequestID {
-			return m, nil
-		}
-		if m.suppressTimeline {
-			return m, nil
-		}
-
-		now := time.Now()
-
-		// Ignore echoes of the previously playing track immediately after triggering playback.
-		if m.ignoreTrackKey != "" {
-			ignoreThreshold := m.ignoreTrackPosMs - 2000
-			minThreshold := m.ignoreTrackPosMs / 2
-			if ignoreThreshold < minThreshold {
-				ignoreThreshold = minThreshold
-			}
-			if msg.TrackKey == m.ignoreTrackKey && now.Before(m.ignoreTrackUntil) && msg.Position >= ignoreThreshold {
-				m.debug(
-					"Ignoring stale transition timeline (trackKey=%s, pos=%d, threshold=%d)",
-					msg.TrackKey, msg.Position, ignoreThreshold,
-				)
-				return m, nil
-			}
-			if msg.TrackKey != m.ignoreTrackKey || !now.Before(m.ignoreTrackUntil) || msg.Position < ignoreThreshold {
-				m.ignoreTrackKey = ""
-				m.ignoreTrackPosMs = 0
-				m.ignoreTrackUntil = time.Time{}
-			}
-		}
-
-		if m.pendingTrackKey != "" {
-			switch msg.TrackKey {
-			case m.pendingTrackKey:
-				m.pendingTrackKey = ""
-				m.pendingTrackUntil = time.Time{}
-			case "":
-				if !m.pendingTrackUntil.IsZero() && now.Before(m.pendingTrackUntil) {
-					m.debug(
-						"Ignoring timeline with empty track key while waiting for pending track key=%s",
-						m.pendingTrackKey,
-					)
-					return m, nil
-				}
-				if !m.pendingTrackUntil.IsZero() {
-					m.debug(
-						"Pending track key timeout reached with empty track key; clearing filter (pending=%s)",
-						m.pendingTrackKey,
-					)
-					m.pendingTrackKey = ""
-					m.pendingTrackUntil = time.Time{}
-				}
-			default:
-				if !m.pendingTrackUntil.IsZero() && now.Before(m.pendingTrackUntil) {
-					m.debug(
-						"Ignoring mismatched timeline track while waiting (got=%s, want=%s)",
-						msg.TrackKey, m.pendingTrackKey,
-					)
-					return m, nil
-				}
-				m.debug(
-					"Pending track key timeout reached; clearing filter (got=%s, want=%s)",
-					msg.TrackKey, m.pendingTrackKey,
-				)
-				m.pendingTrackKey = ""
-				m.pendingTrackUntil = time.Time{}
-			}
-		}
-
-		m.currentTrack = msg.TrackText
-		m.currentTrackKey = msg.TrackKey
-		m.isPlaying = msg.IsPlaying
-		m.durationMs = msg.Duration
-		m.positionMs = msg.Position
-		m.volume = msg.Volume
-		m.lastUpdate = now
+		m.playback.applyTimeline(msg, time.Now(), m.debug)
 		return m, nil
 
 	case trackMsg:
-		m.currentTrack = string(msg)
+		m.playback.currentTrack = string(msg)
 		return m, nil
 
 	case errMsg:
@@ -638,18 +550,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		m.lastCommand = "Playback Failed"
 		m.status = fmt.Sprintf("Playback error: %v", msg.err)
-		m.currentTrack = ""
-		m.currentTrackKey = ""
-		m.isPlaying = false
-		m.durationMs = 0
-		m.positionMs = 0
-		m.lastUpdate = time.Time{}
-		m.suppressTimeline = false
-		m.pendingTrackKey = ""
-		m.pendingTrackUntil = time.Time{}
-		m.ignoreTrackKey = ""
-		m.ignoreTrackPosMs = 0
-		m.ignoreTrackUntil = time.Time{}
+		m.playback.clearAfterFailure()
 		return m, nil
 
 	case playlistsFetchedMsg:
@@ -785,7 +686,7 @@ func (m *model) pollTimeline() tea.Cmd {
 	if m.selected == "" {
 		return nil
 	}
-	reqID := m.timelineRequestID
+	reqID := m.playback.timelineRequestID
 	selected := m.selected
 
 	return func() tea.Msg {
@@ -880,73 +781,16 @@ func (m *model) beginPlaybackRefresh(pendingText string) tea.Cmd {
 }
 
 func (m *model) beginPlaybackRefreshForTrack(pendingText, trackKey string) tea.Cmd {
-	if pendingText == "" {
-		pendingText = "Loading..."
-	}
-	prevTrackKey := m.currentTrackKey
-	prevPos := m.currentPosition()
-	now := time.Now()
-
-	// Clear stale state and avoid showing the previous track while we wait for the new timeline.
-	m.currentTrack = pendingText
-	m.isPlaying = true
-	m.durationMs = 0
-	m.positionMs = 0
-	m.lastUpdate = time.Time{}
-	m.suppressTimeline = false
-	m.pendingTrackKey = trackKey
-	if trackKey != "" {
-		m.pendingTrackUntil = now.Add(8 * time.Second)
-	} else {
-		m.pendingTrackUntil = time.Time{}
-	}
-	if prevTrackKey != "" && prevPos > 1000 {
-		m.ignoreTrackKey = prevTrackKey
-		m.ignoreTrackPosMs = prevPos
-		m.ignoreTrackUntil = now.Add(4 * time.Second)
-	} else {
-		m.ignoreTrackKey = ""
-		m.ignoreTrackPosMs = 0
-		m.ignoreTrackUntil = time.Time{}
-	}
-	m.timelineRequestID++
+	m.playback.beginRefresh(pendingText, trackKey, time.Now())
 	return m.pollTimeline()
 }
 
 func (m *model) beginPlaybackPendingForTrack(pendingText, trackKey string) {
-	if pendingText == "" {
-		pendingText = "Loading..."
-	}
-	m.currentTrack = pendingText
-	m.isPlaying = true
-	m.durationMs = 0
-	m.positionMs = 0
-	m.lastUpdate = time.Time{}
-	m.suppressTimeline = true
-	m.pendingTrackKey = trackKey
-	if trackKey != "" {
-		m.pendingTrackUntil = time.Now().Add(8 * time.Second)
-	} else {
-		m.pendingTrackUntil = time.Time{}
-	}
-	m.ignoreTrackKey = ""
-	m.ignoreTrackPosMs = 0
-	m.ignoreTrackUntil = time.Time{}
-	m.timelineRequestID++
+	m.playback.beginPending(pendingText, trackKey, time.Now())
 }
 
 func (m model) currentPosition() int {
-	pos := m.positionMs
-	if m.isPlaying && !m.lastUpdate.IsZero() {
-		pos += int(time.Since(m.lastUpdate).Milliseconds())
-	}
-	if pos < 0 {
-		pos = 0
-	}
-	if m.durationMs > 0 && pos > m.durationMs {
-		pos = m.durationMs
-	}
-	return pos
+	return m.playback.currentPosition(time.Now())
 }
 
 func formatTime(ms int) string {
@@ -993,7 +837,7 @@ func (m *model) setVolume(v int) {
 	if m.selected == "" {
 		return
 	}
-	m.volume = v
+	m.playback.volume = v
 	url := fmt.Sprintf("http://%s:32500/player/playback/setParameters?volume=%d&commandID=1&type=music", m.selected, v)
 	go func() { _, _ = http.Get(url) }()
 }

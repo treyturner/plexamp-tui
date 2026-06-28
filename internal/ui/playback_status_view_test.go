@@ -7,10 +7,12 @@ import (
 
 func TestPreviousTrackResetsPlayheadAndInvalidatesInFlightPolls(t *testing.T) {
 	m := model{
-		positionMs:        45000,
-		lastUpdate:        time.Now().Add(-5 * time.Second),
-		suppressTimeline:  true,
-		timelineRequestID: 3,
+		playback: playbackState{
+			positionMs:        45000,
+			lastUpdate:        time.Now().Add(-5 * time.Second),
+			suppressTimeline:  true,
+			timelineRequestID: 3,
+		},
 	}
 
 	cmd := m.previousTrack()
@@ -18,16 +20,16 @@ func TestPreviousTrackResetsPlayheadAndInvalidatesInFlightPolls(t *testing.T) {
 		t.Fatalf("expected nil command when no player is selected, got non-nil")
 	}
 
-	if m.positionMs != 0 {
-		t.Fatalf("expected position to reset to 0, got %d", m.positionMs)
+	if m.playback.positionMs != 0 {
+		t.Fatalf("expected position to reset to 0, got %d", m.playback.positionMs)
 	}
-	if m.timelineRequestID != 4 {
-		t.Fatalf("expected timelineRequestID to increment to 4, got %d", m.timelineRequestID)
+	if m.playback.timelineRequestID != 4 {
+		t.Fatalf("expected timelineRequestID to increment to 4, got %d", m.playback.timelineRequestID)
 	}
-	if m.suppressTimeline {
+	if m.playback.suppressTimeline {
 		t.Fatalf("expected suppressTimeline to be false")
 	}
-	if m.lastUpdate.IsZero() {
+	if m.playback.lastUpdate.IsZero() {
 		t.Fatalf("expected lastUpdate to be set")
 	}
 	if m.lastCommand != "Previous" {
