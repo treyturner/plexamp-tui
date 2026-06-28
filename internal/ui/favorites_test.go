@@ -5,27 +5,13 @@ import (
 
 	"plexamp-tui/internal/config"
 
-	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
 func TestPlaybackEnterDrillsDownToArtistAlbums(t *testing.T) {
 	initTestLogger(t)
 
-	m := model{
-		panelMode: panelModePlayback,
-		playbackList: list.New(
-			[]list.Item{item{Name: "Artist A", Type: "artist", MetadataKey: "artist-a"}},
-			list.NewDefaultDelegate(),
-			0,
-			0,
-		),
-		playbackConfig: &config.Favorites{
-			Items: []config.FavoriteItem{
-				{Name: "Artist A", Type: "artist", MetadataKey: "artist-a"},
-			},
-		},
-	}
+	m := testModel(withPlaybackFavorites(testFavorite("Artist A", favoriteTypeArtist, "artist-a")))
 
 	updatedModel, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	if cmd == nil {
@@ -47,20 +33,7 @@ func TestPlaybackEnterDrillsDownToArtistAlbums(t *testing.T) {
 func TestPlaybackEnterDrillsDownToAlbumTracks(t *testing.T) {
 	initTestLogger(t)
 
-	m := model{
-		panelMode: panelModePlayback,
-		playbackList: list.New(
-			[]list.Item{item{Name: "Album A", Type: "album", MetadataKey: "album-a"}},
-			list.NewDefaultDelegate(),
-			0,
-			0,
-		),
-		playbackConfig: &config.Favorites{
-			Items: []config.FavoriteItem{
-				{Name: "Album A", Type: "album", MetadataKey: "album-a"},
-			},
-		},
-	}
+	m := testModel(withPlaybackFavorites(testFavorite("Album A", favoriteTypeAlbum, "album-a")))
 
 	updatedModel, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	if cmd == nil {
@@ -82,20 +55,7 @@ func TestPlaybackEnterDrillsDownToAlbumTracks(t *testing.T) {
 func TestPlaybackEnterDrillsDownToPlaylistTracks(t *testing.T) {
 	initTestLogger(t)
 
-	m := model{
-		panelMode: panelModePlayback,
-		playbackList: list.New(
-			[]list.Item{item{Name: "Playlist A", Type: "playlist", MetadataKey: "playlist-a"}},
-			list.NewDefaultDelegate(),
-			0,
-			0,
-		),
-		playbackConfig: &config.Favorites{
-			Items: []config.FavoriteItem{
-				{Name: "Playlist A", Type: "playlist", MetadataKey: "playlist-a"},
-			},
-		},
-	}
+	m := testModel(withPlaybackFavorites(testFavorite("Playlist A", favoriteTypePlaylist, "playlist-a")))
 
 	updatedModel, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	if cmd == nil {
@@ -129,21 +89,10 @@ func TestPlaybackEnterDoesNotDrillDownWhenFavoriteMetadataKeyMissing(t *testing.
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			displayName := "Legacy " + tt.typ
-			m := model{
-				panelMode: panelModePlayback,
-				status:    "existing",
-				playbackList: list.New(
-					[]list.Item{item{Name: displayName, Type: tt.typ, MetadataKey: ""}},
-					list.NewDefaultDelegate(),
-					0,
-					0,
-				),
-				playbackConfig: &config.Favorites{
-					Items: []config.FavoriteItem{
-						{Name: displayName, Type: tt.typ, MetadataKey: ""},
-					},
-				},
-			}
+			m := testModel(
+				withStatus("existing"),
+				withPlaybackFavorites(config.FavoriteItem{Name: displayName, Type: tt.typ, MetadataKey: ""}),
+			)
 
 			updatedModel, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 			if cmd != nil {
@@ -164,13 +113,10 @@ func TestPlaybackEnterDoesNotDrillDownWhenFavoriteMetadataKeyMissing(t *testing.
 
 func TestFavoriteToggleRemovesMatchingFavoriteByTypeAndKey(t *testing.T) {
 	favorites := []config.FavoriteItem{
-		{Name: "Artist A", Type: "artist", MetadataKey: "artist-a"},
-		{Name: "Album B", Type: "album", MetadataKey: "album-b"},
+		testFavorite("Artist A", favoriteTypeArtist, "artist-a"),
+		testFavorite("Album B", favoriteTypeAlbum, "album-b"),
 	}
-	m := model{
-		playbackConfig: &config.Favorites{Items: favorites},
-		playbackList:   list.New(favoriteListItems(favorites), list.NewDefaultDelegate(), 0, 0),
-	}
+	m := testModel(withPlaybackFavorites(favorites...))
 
 	updatedModel, cmd := m.addRemoveFavorite("Album B", "album-b", favoriteTypeAlbum)
 	if cmd != nil {
@@ -199,22 +145,10 @@ func TestFavoriteToggleRemovesMatchingFavoriteByTypeAndKey(t *testing.T) {
 func TestPlaybackPTriggersDirectPlay(t *testing.T) {
 	initTestLogger(t)
 
-	m := model{
-		panelMode: panelModePlayback,
-		playbackList: list.New(
-			[]list.Item{item{Name: "Album A", Type: "album", MetadataKey: "album-a"}},
-			list.NewDefaultDelegate(),
-			0,
-			0,
-		),
-		playbackConfig: &config.Favorites{
-			Items: []config.FavoriteItem{
-				{Name: "Album A", Type: "album", MetadataKey: "album-a"},
-			},
-		},
-		selected: "127.0.0.1",
-		config:   &config.Config{},
-	}
+	m := testModel(
+		withPlaybackFavorites(testFavorite("Album A", favoriteTypeAlbum, "album-a")),
+		withSelectedPlayer("127.0.0.1", &config.Config{}),
+	)
 
 	updatedModel, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'P'}})
 	if cmd == nil {
