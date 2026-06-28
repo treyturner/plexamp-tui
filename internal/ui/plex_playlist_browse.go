@@ -215,11 +215,7 @@ func (m *model) handlePlaylistBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		favSet := make(map[string]struct{})
-		for _, pItem := range m.playbackList.Items() {
-			pItem := pItem.(item)
-			favSet[pItem.GetMetadataKey()] = struct{}{}
-		}
+		favSet := m.favoritesController().metadataKeySet()
 
 		// Convert playlists to list items
 		var items []list.Item

@@ -3,8 +3,6 @@ package ui
 import (
 	"fmt"
 
-	"plexamp-tui/internal/config"
-
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
@@ -219,24 +217,9 @@ func (m *model) savePlaybackEdit() error {
 		return fmt.Errorf("metadata key cannot be empty")
 	}
 
-	if err := config.FavsManager.Add(config.FavoriteItem{
-		Name:        newName,
-		Type:        string(selectedType),
-		MetadataKey: newMetadataKey,
-	}); err != nil {
+	if err := m.favoritesController().add(newName, newMetadataKey, selectedType); err != nil {
 		return err
 	}
-
-	allFavs, err := config.FavsManager.List()
-	if err != nil {
-		return err
-	}
-	// Update the list
-	var items []list.Item
-	for _, pb := range allFavs {
-		items = append(items, item{pb.Name, pb.Type, pb.MetadataKey})
-	}
-	m.playbackList.SetItems(items)
 
 	// Return to playback panel
 	m.panelMode = panelModePlayback
@@ -313,32 +296,5 @@ func (m model) editPanelView() string {
 
 // deletePlaybackItem removes a playback item from the config
 func (m *model) deletePlaybackItem(index int) error {
-	favToRemove := m.playbackList.Items()[index].(item)
-	if index >= 0 && m.playbackConfig != nil && index < len(m.playbackConfig.Items) {
-		m.playbackConfig.Items = append(m.playbackConfig.Items[:index], m.playbackConfig.Items[index+1:]...)
-	}
-
-	// Update the list
-	var items []list.Item
-	for _, pb := range m.playbackConfig.Items {
-		items = append(items, item{Name: pb.Name, Type: pb.Type, MetadataKey: pb.MetadataKey})
-	}
-	m.playbackList.SetItems(items)
-
-	if err := m.deps.favsManager.Remove(favToRemove.Type, favToRemove.MetadataKey); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (m *model) savePlaybackItem(name string, k string, t favoriteType) error {
-	fav := config.FavoriteItem{Name: name, Type: string(t), MetadataKey: k}
-	m.playbackConfig.Items = append(m.playbackConfig.Items, fav)
-	m.playbackList.SetItems(append(m.playbackList.Items(), item{Name: name, MetadataKey: k, Type: string(t)}))
-
-	if err := m.deps.favsManager.Add(fav); err != nil {
-		return err
-	}
-	return nil
+	return m.favoritesController().removeAt(index)
 }
