@@ -384,117 +384,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
-		// Handle edit mode separately
-		if m.panelMode == panelModeEdit {
-			return m.handleEditUpdate(msg)
-		}
-
-		// Handle artist browse mode
-		if m.panelMode == panelModePlexArtists {
-			modelPtr := &m
-			_, cmd := modelPtr.handleArtistBrowseUpdate(msg)
-			return m, cmd
-		}
-
-		// Handle album browse mode
-		if m.panelMode == panelModePlexAlbums {
-			modelPtr := &m
-			_, cmd := modelPtr.handleAlbumBrowseUpdate(msg)
-			return m, cmd
-		}
-
-		// Handle artist album browse mode
-		if m.panelMode == panelModePlexArtistAlbums {
-			modelPtr := &m
-			_, cmd := modelPtr.handleArtistAlbumBrowseUpdate(msg)
-			return m, cmd
-		}
-
-		// Handle album/playlist track browse mode
-		if m.panelMode == panelModePlexAlbumTracks || m.panelMode == panelModePlexPlaylistTracks {
-			modelPtr := &m
-			_, cmd := modelPtr.handleTrackBrowseUpdate(msg)
-			return m, cmd
-		}
-
-		// Handle playlist browse mode
-		if m.panelMode == panelModePlexPlaylists {
-			modelPtr := &m
-			_, cmd := modelPtr.handlePlaylistBrowseUpdate(msg)
-			return m, cmd
-		}
-
-		// Handle server browse mode
-		if m.panelMode == panelModePlexServers {
-			modelPtr := &m
-			_, cmd := modelPtr.handleServerBrowseUpdate(msg)
-			return m, cmd
-		}
-
-		// Handle player browse mode
-		if m.panelMode == panelModePlexPlayers {
-			modelPtr := &m
-			_, cmd := modelPtr.handlePlayerBrowseUpdate(msg)
-			return m, cmd
-		}
-
-		// Handle playback selection (when in playback/favorites mode)
-		if m.panelMode == panelModePlayback {
-			// Check if we're in filtering mode for the playback list
-			if m.playbackList.FilterState() == list.Filtering {
-				var cmd tea.Cmd
-				m.playbackList, cmd = m.playbackList.Update(msg)
-				return m, cmd
-			}
-
-			switch msg.String() {
-			case "a":
-				// Add new playback item
-				m.initEditMode(editModePlayback, -1)
-				return m, nil
-
-			case "e":
-				// Edit selected playback item
-				index := m.playbackList.Index()
-				m.initEditMode(editModePlayback, index)
-				return m, nil
-
-			case "d":
-				// Delete selected playback item
-				index := m.playbackList.Index()
-				if err := m.deletePlaybackItem(index); err != nil {
-					m.status = "Error deleting favorite: " + err.Error()
-					m.lastCommand = "Delete Failed"
-				}
-				return m, nil
-
-			case "r":
-				// play station/radio if selection is an artist
-				if selected, ok := m.playbackList.SelectedItem().(item); ok {
-					if pb, found := m.findFavoriteItem(selected); found && favoriteType(pb.Type) == favoriteTypeArtist {
-						return m, m.triggerFavoriteRadioPlayback(pb)
-					}
-				}
-
-			case "enter":
-				// Drill down into the selected favorite item.
-				if selected, ok := m.playbackList.SelectedItem().(item); ok {
-					if pb, found := m.findFavoriteItem(selected); found {
-						return m, m.openFavoriteItem(pb)
-					}
-				}
-				return m, nil
-
-			case "P":
-				// Direct playback for selected favorite item.
-				if selected, ok := m.playbackList.SelectedItem().(item); ok {
-					if pb, found := m.findFavoriteItem(selected); found {
-						return m, m.triggerFavoritePlayback(pb)
-					}
-				}
-				return m, nil
-
-			}
+		modelPtr := &m
+		if routedModel, cmd, handled := modelPtr.routeScreenKey(msg); handled {
+			return routedModel, cmd
 		}
 
 		// Main app key handlers (only processed when popup is NOT open)
@@ -586,38 +478,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case artistsFetchedMsg:
-		// Forward the message to the artist browse handler
-		if m.panelMode == panelModePlexArtists {
-			modelPtr := &m
-			_, cmd := modelPtr.handleArtistBrowseUpdate(msg)
-			return m, cmd
-		}
-		return m, nil
+		return (&m).routeScreenMsg(msg)
 
 	case albumsFetchedMsg:
-		// Forward the message to the album browse handler
-		if m.panelMode == panelModePlexAlbums {
-			modelPtr := &m
-			_, cmd := modelPtr.handleAlbumBrowseUpdate(msg)
-			return m, cmd
-		}
-		return m, nil
+		return (&m).routeScreenMsg(msg)
 
 	case artistAlbumsFetchedMsg:
-		if m.panelMode == panelModePlexArtistAlbums {
-			modelPtr := &m
-			_, cmd := modelPtr.handleArtistAlbumBrowseUpdate(msg)
-			return m, cmd
-		}
-		return m, nil
+		return (&m).routeScreenMsg(msg)
 
 	case tracksFetchedMsg:
-		if m.panelMode == panelModePlexAlbumTracks || m.panelMode == panelModePlexPlaylistTracks {
-			modelPtr := &m
-			_, cmd := modelPtr.handleTrackBrowseUpdate(msg)
-			return m, cmd
-		}
-		return m, nil
+		return (&m).routeScreenMsg(msg)
 
 	case trackPlaybackMsg:
 		if msg.selected != "" && msg.selected != m.selected {
@@ -652,53 +522,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case playlistsFetchedMsg:
-		// Forward the message to the playlist browse handler
-		if m.panelMode == panelModePlexPlaylists {
-			modelPtr := &m
-			_, cmd := modelPtr.handlePlaylistBrowseUpdate(msg)
-			return m, cmd
-		}
-		return m, nil
+		return (&m).routeScreenMsg(msg)
 
 	case serversFetchedMsg:
-		// Forward the message to the server browse handler
-		if m.panelMode == panelModePlexServers {
-			modelPtr := &m
-			_, cmd := modelPtr.handleServerBrowseUpdate(msg)
-			return m, cmd
-		}
-		return m, nil
+		return (&m).routeScreenMsg(msg)
 
 	case playersFetchedMsg:
-		// Forward the message to the player browse handler
-		if m.panelMode == panelModePlexPlayers {
-			modelPtr := &m
-			_, cmd := modelPtr.handlePlayerBrowseUpdate(msg)
-			return m, cmd
-		}
-		return m, nil
+		return (&m).routeScreenMsg(msg)
 	}
 
-	// Update the appropriate list based on panel mode
-	var cmd tea.Cmd
-	switch m.panelMode {
-	case panelModePlayback:
-		m.playbackList, cmd = m.playbackList.Update(msg)
-	case panelModePlexArtists:
-		m.artistList, cmd = m.artistList.Update(msg)
-	case panelModePlexArtistAlbums:
-		m.artistAlbumList, cmd = m.artistAlbumList.Update(msg)
-	case panelModePlexAlbums:
-		m.albumList, cmd = m.albumList.Update(msg)
-	case panelModePlexAlbumTracks, panelModePlexPlaylistTracks:
-		m.trackList, cmd = m.trackList.Update(msg)
-	case panelModePlexPlaylists:
-		m.playlistList, cmd = m.playlistList.Update(msg)
-	case panelModePlexServers:
-		m.serverList, cmd = m.serverList.Update(msg)
-	case panelModePlexPlayers:
-		m.playerList, cmd = m.playerList.Update(msg)
-	}
+	cmd := (&m).updateActiveList(msg)
 	return m, cmd
 }
 
@@ -713,29 +546,7 @@ func (m model) View() string {
 		return lipgloss.JoinVertical(lipgloss.Left, title, editPanel)
 	}
 
-	// Build left panel content
-	var leftPanelContent string
-	switch m.panelMode {
-	case panelModePlayback:
-		leftPanelContent = m.playbackList.View()
-	case panelModePlexArtists:
-		leftPanelContent = m.artistList.View()
-	case panelModePlexArtistAlbums:
-		leftPanelContent = m.artistAlbumList.View()
-	case panelModePlexAlbums:
-		leftPanelContent = m.albumList.View()
-	case panelModePlexAlbumTracks, panelModePlexPlaylistTracks:
-		leftPanelContent = m.trackList.View()
-	case panelModePlexPlaylists:
-		leftPanelContent = m.playlistList.View()
-	case panelModePlexServers:
-		leftPanelContent = m.serverList.View()
-	case panelModePlexPlayers:
-		leftPanelContent = m.playerList.View()
-	}
-
-	// Left panel
-	leftPanel := border.Width(m.width/2 - 2).Render(leftPanelContent)
+	leftPanel := border.Width(m.width/2 - 2).Render(m.activePanelView())
 
 	// Right side has two stacked panels
 	playbackPanel := border.Width(m.width/2 - 2).Render(m.playbackStatusView())
