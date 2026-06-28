@@ -3,11 +3,8 @@ package plex
 import (
 	"encoding/xml"
 	"fmt"
-	"io"
-	"net/http"
 	"net/url"
 	"plexamp-tui/internal/config"
-	"sort"
 	"strings"
 )
 
@@ -113,46 +110,17 @@ func (p *PlexClient) FetchArtists(serverAddr, libraryID, token string) ([]PlexAr
 
 	p.logger.Debug("Fetching artists from: %s", urlStr)
 
-	resp, err := http.Get(urlStr)
+	body, err := p.get(urlStr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch artists: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		p.logger.Debug("Server returned status %d", resp.StatusCode)
-		return nil, fmt.Errorf("server returned status %d", resp.StatusCode)
-	}
-
-	body, err := io.ReadAll(resp.Body)
+	artists, err := parseArtists(body)
 	if err != nil {
-		p.logger.Debug("Failed to read response: %v", err)
-		return nil, fmt.Errorf("failed to read response: %w", err)
-	}
-
-	var container PlexMediaContainer
-	if err := xml.Unmarshal(body, &container); err != nil {
-		p.logger.Debug("Failed to parse XML: %v", err)
-		return nil, fmt.Errorf("failed to parse XML: %w", err)
-	}
-
-	var artists []PlexArtist
-	for _, dir := range container.Directories {
-		if dir.Type == "artist" {
-			artists = append(artists, PlexArtist{
-				RatingKey: dir.RatingKey,
-				Title:     dir.Title,
-				Type:      dir.Type,
-			})
-		}
+		p.logger.Debug("Failed to parse artists: %v", err)
+		return nil, err
 	}
 
 	p.logger.Debug("Fetched %d artists", len(artists))
-
-	// Sort artists alphabetically by title
-	sort.Slice(artists, func(i, j int) bool {
-		return artists[i].Title < artists[j].Title
-	})
 
 	return artists, nil
 }
@@ -168,48 +136,17 @@ func (p *PlexClient) FetchAlbums(serverAddr, libraryID, token string) ([]PlexAlb
 
 	p.logger.Debug("Fetching albums from: %s", urlStr)
 
-	resp, err := http.Get(urlStr)
+	body, err := p.get(urlStr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch albums: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		p.logger.Debug("Server returned status %d", resp.StatusCode)
-		return nil, fmt.Errorf("server returned status %d", resp.StatusCode)
-	}
-
-	body, err := io.ReadAll(resp.Body)
+	albums, err := parseAlbums(body)
 	if err != nil {
-		p.logger.Debug("Failed to read response: %v", err)
-		return nil, fmt.Errorf("failed to read response: %w", err)
-	}
-
-	var container PlexMediaContainer
-	if err := xml.Unmarshal(body, &container); err != nil {
-		p.logger.Debug("Failed to parse XML: %v", err)
-		return nil, fmt.Errorf("failed to parse XML: %w", err)
-	}
-
-	var albums []PlexAlbum
-	for _, dir := range container.Directories {
-		if dir.Type == "album" {
-			albums = append(albums, PlexAlbum{
-				RatingKey:   dir.RatingKey,
-				Title:       dir.Title,
-				ParentTitle: dir.ParentTitle,
-				Year:        dir.Year,
-				Type:        dir.Type,
-			})
-		}
+		p.logger.Debug("Failed to parse albums: %v", err)
+		return nil, err
 	}
 
 	p.logger.Debug("Fetched %d albums", len(albums))
-
-	// Sort albums alphabetically by title
-	sort.Slice(albums, func(i, j int) bool {
-		return albums[i].ParentTitle < albums[j].ParentTitle
-	})
 
 	return albums, nil
 }
@@ -225,42 +162,14 @@ func (p *PlexClient) FetchArtistAlbums(serverAddr, artistRatingKey, token string
 
 	p.logger.Debug("Fetching albums for artist %s from: %s", artistRatingKey, urlStr)
 
-	resp, err := http.Get(urlStr)
+	body, err := p.get(urlStr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch artist albums: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("server returned status %d", resp.StatusCode)
-	}
-
-	body, err := io.ReadAll(resp.Body)
+	albums, err := parseArtistAlbums(body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
+		return nil, err
 	}
-
-	var container PlexMediaContainer
-	if err := xml.Unmarshal(body, &container); err != nil {
-		return nil, fmt.Errorf("failed to parse XML: %w", err)
-	}
-
-	var albums []PlexAlbum
-	for _, dir := range container.Directories {
-		if dir.Type == "album" {
-			albums = append(albums, PlexAlbum{
-				RatingKey:   dir.RatingKey,
-				Title:       dir.Title,
-				ParentTitle: dir.ParentTitle,
-				Year:        dir.Year,
-				Type:        dir.Type,
-			})
-		}
-	}
-
-	sort.Slice(albums, func(i, j int) bool {
-		return albums[i].Title < albums[j].Title
-	})
 
 	return albums, nil
 }
@@ -272,27 +181,16 @@ func (p *PlexClient) FetchPlaylists(serverAddr, token string) ([]PlexPlaylist, e
 
 	p.logger.Debug("Fetching playlists from: %s", urlStr)
 
-	resp, err := http.Get(urlStr)
+	body, err := p.get(urlStr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch playlists: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("server returned status %d", resp.StatusCode)
-	}
-
-	body, err := io.ReadAll(resp.Body)
+	playlists, err := parsePlaylists(body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
+		return nil, err
 	}
 
-	var container PlexPlaylistContainer
-	if err := xml.Unmarshal(body, &container); err != nil {
-		return nil, fmt.Errorf("failed to parse XML: %w", err)
-	}
-
-	return container.Playlists, nil
+	return playlists, nil
 }
 
 func (p *PlexClient) FetchAlbumTracks(serverAddr, albumRatingKey, token string) ([]PlexTrack, error) {
@@ -305,34 +203,16 @@ func (p *PlexClient) FetchAlbumTracks(serverAddr, albumRatingKey, token string) 
 
 	p.logger.Debug("Fetching tracks for album %s from: %s", albumRatingKey, urlStr)
 
-	resp, err := http.Get(urlStr)
+	body, err := p.get(urlStr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch album tracks: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("server returned status %d", resp.StatusCode)
-	}
-
-	body, err := io.ReadAll(resp.Body)
+	tracks, err := parseAlbumTracks(body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
+		return nil, err
 	}
 
-	var container PlexTrackContainer
-	if err := xml.Unmarshal(body, &container); err != nil {
-		return nil, fmt.Errorf("failed to parse XML: %w", err)
-	}
-
-	sort.SliceStable(container.Tracks, func(i, j int) bool {
-		if container.Tracks[i].ParentIndex == container.Tracks[j].ParentIndex {
-			return container.Tracks[i].Index < container.Tracks[j].Index
-		}
-		return container.Tracks[i].ParentIndex < container.Tracks[j].ParentIndex
-	})
-
-	return container.Tracks, nil
+	return tracks, nil
 }
 
 func (p *PlexClient) FetchPlaylistTracks(serverAddr, playlistRatingKey, token string) ([]PlexTrack, error) {
@@ -345,27 +225,16 @@ func (p *PlexClient) FetchPlaylistTracks(serverAddr, playlistRatingKey, token st
 
 	p.logger.Debug("Fetching tracks for playlist %s from: %s", playlistRatingKey, urlStr)
 
-	resp, err := http.Get(urlStr)
+	body, err := p.get(urlStr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch playlist tracks: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("server returned status %d", resp.StatusCode)
-	}
-
-	body, err := io.ReadAll(resp.Body)
+	tracks, err := parseTracks(body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
+		return nil, err
 	}
 
-	var container PlexTrackContainer
-	if err := xml.Unmarshal(body, &container); err != nil {
-		return nil, fmt.Errorf("failed to parse XML: %w", err)
-	}
-
-	return container.Tracks, nil
+	return tracks, nil
 }
 
 func (p *PlexClient) FetchLibrary(serverAddr string) ([]config.PlexLibrary, error) {
@@ -376,37 +245,13 @@ func (p *PlexClient) FetchLibrary(serverAddr string) ([]config.PlexLibrary, erro
 
 	p.logger.Debug("Fetching library from: %s", urlStr)
 
-	resp, err := http.Get(urlStr)
+	body, err := p.get(urlStr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch library: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("server returned status %d", resp.StatusCode)
-	}
-
-	body, err := io.ReadAll(resp.Body)
+	libraries, err := parseArtistLibraries(body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
-	}
-
-	var container PlexLibraryContainer
-	if err := xml.Unmarshal(body, &container); err != nil {
-		return nil, fmt.Errorf("failed to parse XML: %w", err)
-	}
-
-	p.logger.Debug("Fetched %d libraries", len(container.Libraries))
-	// filter just artist libraries
-	var libraries []config.PlexLibrary
-	for _, lib := range container.Libraries {
-		if lib.Type == "artist" {
-			libraries = append(libraries, config.PlexLibrary{
-				Key:   lib.Key,
-				Title: lib.Title,
-				Type:  lib.Type,
-			})
-		}
+		return nil, err
 	}
 
 	p.logger.Debug("Fetched %d artist libraries", len(libraries))

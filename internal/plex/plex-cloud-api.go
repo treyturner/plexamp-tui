@@ -3,9 +3,7 @@ package plex
 import (
 	"encoding/xml"
 	"fmt"
-	"io"
 	"net/http"
-	"strings"
 )
 
 //curl "https://plex.tv/api/resources?includeHttps=1&includeRelay=1&X-Plex-Token=<token>"
@@ -62,46 +60,14 @@ func (p *PlexClient) GetPlexServerInformation() ([]PlexConnectionSelection, erro
 	token := p.GetPlexToken()
 	urlStr := fmt.Sprintf("%s/api/resources?includeHttps=1&includeRelay=1&X-Plex-Token=%s", plexCloudBaseURL, token)
 
-	resp, err := http.Get(urlStr)
+	body, err := p.get(urlStr, http.StatusOK, http.StatusNoContent)
 	if err != nil {
 		p.logger.Debug("Request error: %v", err)
 		return nil, fmt.Errorf("failed to connect to %s: %w", plexCloudBaseURL, err)
 	}
-	defer func() { _ = resp.Body.Close() }()
-
-	p.logger.Debug("Response status: %d", resp.StatusCode)
-
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
-		return nil, fmt.Errorf("server returned status %d", resp.StatusCode)
-	}
-
-	body, err := io.ReadAll(resp.Body)
+	servers, err := parsePlexConnections(body, "server")
 	if err != nil {
-		return nil, fmt.Errorf("failed to read response body: %w", err)
-	}
-
-	var container PlexDeviceContainer
-	if err := xml.Unmarshal(body, &container); err != nil {
-		return nil, fmt.Errorf("failed to parse XML: %w", err)
-	}
-
-	var servers []PlexConnectionSelection
-	for _, device := range container.Devices {
-		if !strings.Contains(device.Provides, "server") {
-			continue
-		}
-		for _, connection := range device.Connections {
-			serverConnection := PlexConnectionSelection{
-				Name:             device.Name,
-				ClientIdentifier: device.ClientIdentifier,
-				Scheme:           connection.Protocol,
-				Address:          connection.Address,
-				Local:            connection.Local,
-				Port:             connection.Port,
-				URI:              connection.URI,
-			}
-			servers = append(servers, serverConnection)
-		}
+		return nil, err
 	}
 
 	return servers, nil
@@ -111,46 +77,14 @@ func (p *PlexClient) GetPlexPlayers() ([]PlexConnectionSelection, error) {
 	token := p.GetPlexToken()
 	urlStr := fmt.Sprintf("%s/api/resources?includeHttps=1&includeRelay=1&X-Plex-Token=%s", plexCloudBaseURL, token)
 
-	resp, err := http.Get(urlStr)
+	body, err := p.get(urlStr, http.StatusOK, http.StatusNoContent)
 	if err != nil {
 		p.logger.Debug("Request error: %v", err)
 		return nil, fmt.Errorf("failed to connect to %s: %w", plexCloudBaseURL, err)
 	}
-	defer func() { _ = resp.Body.Close() }()
-
-	p.logger.Debug("Response status: %d", resp.StatusCode)
-
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
-		return nil, fmt.Errorf("server returned status %d", resp.StatusCode)
-	}
-
-	body, err := io.ReadAll(resp.Body)
+	servers, err := parsePlexConnections(body, "player")
 	if err != nil {
-		return nil, fmt.Errorf("failed to read response body: %w", err)
-	}
-
-	var container PlexDeviceContainer
-	if err := xml.Unmarshal(body, &container); err != nil {
-		return nil, fmt.Errorf("failed to parse XML: %w", err)
-	}
-
-	var servers []PlexConnectionSelection
-	for _, device := range container.Devices {
-		if !strings.Contains(device.Provides, "player") {
-			continue
-		}
-		for _, connection := range device.Connections {
-			serverConnection := PlexConnectionSelection{
-				Name:             device.Name,
-				ClientIdentifier: device.ClientIdentifier,
-				Scheme:           connection.Protocol,
-				Address:          connection.Address,
-				Local:            connection.Local,
-				Port:             connection.Port,
-				URI:              connection.URI,
-			}
-			servers = append(servers, serverConnection)
-		}
+		return nil, err
 	}
 
 	return servers, nil
