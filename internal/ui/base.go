@@ -266,7 +266,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.config.SelectedPlayer = msg.player.address
 			m.config.SelectedPlayerName = msg.player.title
 			m.selected = msg.player.address
-			cfgManager.Save(m.config)
+			if err := cfgManager.Save(m.config); err != nil {
+				m.status = "Error saving player selection: " + err.Error()
+				m.lastCommand = "Player Selection Save Failed"
+				return m, nil
+			}
 			m.lastCommand = "Player Selected"
 			m.status = ""
 			m.panelMode = "playback" // Return to playback view after selection
@@ -311,8 +315,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.config.PlexLibraryID = msg.libraries[0].Key
 			}
 
-			log.Debug(fmt.Sprintf("Saving server config: %v", m.config))
-			cfgManager.Save(m.config)
+			log.Debug("Saving server config: %v", m.config)
+			if err := cfgManager.Save(m.config); err != nil {
+				m.status = "Error saving server selection: " + err.Error()
+				m.lastCommand = "Server Selection Save Failed"
+				return m, nil
+			}
 			m.lastCommand = "Server Selected"
 			m.status = ""
 			m.panelMode = "playback" // Return to playback view after selection
@@ -346,100 +354,50 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Handle artist browse mode
 		if m.panelMode == "plex-artists" {
-			// Create a pointer to the current model
 			modelPtr := &m
-			// Call handleArtistBrowseUpdate which will modify the model directly
-			updatedModel, cmd := modelPtr.handleArtistBrowseUpdate(msg)
-			// The updated model might be a different instance, so we need to update our local copy
-			if updatedModel != nil {
-				if m2, ok := updatedModel.(model); ok {
-					m = m2
-				}
-			}
+			_, cmd := modelPtr.handleArtistBrowseUpdate(msg)
 			return m, cmd
 		}
 
 		// Handle album browse mode
 		if m.panelMode == "plex-albums" {
-			// Create a pointer to the current model
 			modelPtr := &m
-			// Call handleAlbumBrowseUpdate which will modify the model directly
-			updatedModel, cmd := modelPtr.handleAlbumBrowseUpdate(msg)
-			// The updated model might be a different instance, so we need to update our local copy
-			if updatedModel != nil {
-				if m2, ok := updatedModel.(model); ok {
-					m = m2
-				}
-			}
+			_, cmd := modelPtr.handleAlbumBrowseUpdate(msg)
 			return m, cmd
 		}
 
 		// Handle artist album browse mode
 		if m.panelMode == "plex-artist-albums" {
 			modelPtr := &m
-			updatedModel, cmd := modelPtr.handleArtistAlbumBrowseUpdate(msg)
-			if updatedModel != nil {
-				if m2, ok := updatedModel.(model); ok {
-					m = m2
-				}
-			}
+			_, cmd := modelPtr.handleArtistAlbumBrowseUpdate(msg)
 			return m, cmd
 		}
 
 		// Handle album/playlist track browse mode
 		if m.panelMode == "plex-album-tracks" || m.panelMode == "plex-playlist-tracks" {
 			modelPtr := &m
-			updatedModel, cmd := modelPtr.handleTrackBrowseUpdate(msg)
-			if updatedModel != nil {
-				if m2, ok := updatedModel.(model); ok {
-					m = m2
-				}
-			}
+			_, cmd := modelPtr.handleTrackBrowseUpdate(msg)
 			return m, cmd
 		}
 
 		// Handle playlist browse mode
 		if m.panelMode == "plex-playlists" {
-			// Create a pointer to the current model
 			modelPtr := &m
-			// Call handlePlaylistBrowseUpdate which will modify the model directly
-			updatedModel, cmd := modelPtr.handlePlaylistBrowseUpdate(msg)
-			// The updated model might be a different instance, so we need to update our local copy
-			if updatedModel != nil {
-				if m2, ok := updatedModel.(model); ok {
-					m = m2
-				}
-			}
+			_, cmd := modelPtr.handlePlaylistBrowseUpdate(msg)
 			return m, cmd
 		}
 
 		// Handle server browse mode
 		if m.panelMode == "plex-servers" {
-			// Create a pointer to the current model
 			modelPtr := &m
-			// Call handleServerBrowseUpdate which will modify the model directly
-			updatedModel, cmd := modelPtr.handleServerBrowseUpdate(msg)
-			// The updated model might be a different instance, so we need to update our local copy
-			if updatedModel != nil {
-				if m2, ok := updatedModel.(model); ok {
-					m = m2
-				}
-			}
+			_, cmd := modelPtr.handleServerBrowseUpdate(msg)
 			return m, cmd
 		}
 
 		// Handle player browse mode
 		if m.panelMode == "plex-players" {
-			// Create a pointer to the current model
 			modelPtr := &m
-			// Call handlePlayerBrowseUpdate which will modify the model directly
-			updatedModel, cmd := modelPtr.handlePlayerBrowseUpdate(msg)
-			// The updated model might be a different instance, so we need to update our local copy
-			if updatedModel != nil {
-				if m2, ok := updatedModel.(model); ok {
-					m = m2
-				}
-			}
+			_, cmd := modelPtr.handlePlayerBrowseUpdate(msg)
 			return m, cmd
 		}
 
@@ -467,7 +425,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "d":
 				// Delete selected playback item
 				index := m.playbackList.Index()
-				m.deletePlaybackItem(index)
+				if err := m.deletePlaybackItem(index); err != nil {
+					m.status = "Error deleting favorite: " + err.Error()
+					m.lastCommand = "Delete Failed"
+				}
 				return m, nil
 
 			case "r":
@@ -535,9 +496,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				ignoreThreshold = minThreshold
 			}
 			if msg.TrackKey == m.ignoreTrackKey && now.Before(m.ignoreTrackUntil) && msg.Position >= ignoreThreshold {
-				log.Debug(fmt.Sprintf(
+				log.Debug(
 					"Ignoring stale transition timeline (trackKey=%s, pos=%d, threshold=%d)",
-					msg.TrackKey, msg.Position, ignoreThreshold),
+					msg.TrackKey, msg.Position, ignoreThreshold,
 				)
 				return m, nil
 			}
@@ -549,37 +510,37 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		if m.pendingTrackKey != "" {
-			switch {
-			case msg.TrackKey == m.pendingTrackKey:
+			switch msg.TrackKey {
+			case m.pendingTrackKey:
 				m.pendingTrackKey = ""
 				m.pendingTrackUntil = time.Time{}
-			case msg.TrackKey == "":
+			case "":
 				if !m.pendingTrackUntil.IsZero() && now.Before(m.pendingTrackUntil) {
-					log.Debug(fmt.Sprintf(
+					log.Debug(
 						"Ignoring timeline with empty track key while waiting for pending track key=%s",
-						m.pendingTrackKey),
+						m.pendingTrackKey,
 					)
 					return m, nil
 				}
 				if !m.pendingTrackUntil.IsZero() {
-					log.Debug(fmt.Sprintf(
+					log.Debug(
 						"Pending track key timeout reached with empty track key; clearing filter (pending=%s)",
-						m.pendingTrackKey),
+						m.pendingTrackKey,
 					)
 					m.pendingTrackKey = ""
 					m.pendingTrackUntil = time.Time{}
 				}
 			default:
 				if !m.pendingTrackUntil.IsZero() && now.Before(m.pendingTrackUntil) {
-					log.Debug(fmt.Sprintf(
+					log.Debug(
 						"Ignoring mismatched timeline track while waiting (got=%s, want=%s)",
-						msg.TrackKey, m.pendingTrackKey),
+						msg.TrackKey, m.pendingTrackKey,
 					)
 					return m, nil
 				}
-				log.Debug(fmt.Sprintf(
+				log.Debug(
 					"Pending track key timeout reached; clearing filter (got=%s, want=%s)",
-					msg.TrackKey, m.pendingTrackKey),
+					msg.TrackKey, m.pendingTrackKey,
 				)
 				m.pendingTrackKey = ""
 				m.pendingTrackUntil = time.Time{}
@@ -620,12 +581,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Forward the message to the artist browse handler
 		if m.panelMode == "plex-artists" {
 			modelPtr := &m
-			updatedModel, cmd := modelPtr.handleArtistBrowseUpdate(msg)
-			if updatedModel != nil {
-				if m2, ok := updatedModel.(model); ok {
-					m = m2
-				}
-			}
+			_, cmd := modelPtr.handleArtistBrowseUpdate(msg)
 			return m, cmd
 		}
 		return m, nil
@@ -634,12 +590,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Forward the message to the album browse handler
 		if m.panelMode == "plex-albums" {
 			modelPtr := &m
-			updatedModel, cmd := modelPtr.handleAlbumBrowseUpdate(msg)
-			if updatedModel != nil {
-				if m2, ok := updatedModel.(model); ok {
-					m = m2
-				}
-			}
+			_, cmd := modelPtr.handleAlbumBrowseUpdate(msg)
 			return m, cmd
 		}
 		return m, nil
@@ -647,12 +598,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case artistAlbumsFetchedMsg:
 		if m.panelMode == "plex-artist-albums" {
 			modelPtr := &m
-			updatedModel, cmd := modelPtr.handleArtistAlbumBrowseUpdate(msg)
-			if updatedModel != nil {
-				if m2, ok := updatedModel.(model); ok {
-					m = m2
-				}
-			}
+			_, cmd := modelPtr.handleArtistAlbumBrowseUpdate(msg)
 			return m, cmd
 		}
 		return m, nil
@@ -660,21 +606,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tracksFetchedMsg:
 		if m.panelMode == "plex-album-tracks" || m.panelMode == "plex-playlist-tracks" {
 			modelPtr := &m
-			updatedModel, cmd := modelPtr.handleTrackBrowseUpdate(msg)
-			if updatedModel != nil {
-				if m2, ok := updatedModel.(model); ok {
-					m = m2
-				}
-			}
+			_, cmd := modelPtr.handleTrackBrowseUpdate(msg)
 			return m, cmd
 		}
 		return m, nil
 
 	case trackPlaybackMsg:
 		if msg.requestID != m.trackPlaybackReqID {
-			log.Debug(fmt.Sprintf(
+			log.Debug(
 				"Ignoring stale trackPlaybackMsg (requestID=%d, current=%d)",
-				msg.requestID, m.trackPlaybackReqID),
+				msg.requestID, m.trackPlaybackReqID,
 			)
 			return m, nil
 		}
@@ -705,12 +646,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Forward the message to the playlist browse handler
 		if m.panelMode == "plex-playlists" {
 			modelPtr := &m
-			updatedModel, cmd := modelPtr.handlePlaylistBrowseUpdate(msg)
-			if updatedModel != nil {
-				if m2, ok := updatedModel.(model); ok {
-					m = m2
-				}
-			}
+			_, cmd := modelPtr.handlePlaylistBrowseUpdate(msg)
 			return m, cmd
 		}
 		return m, nil
@@ -719,12 +655,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Forward the message to the server browse handler
 		if m.panelMode == "plex-servers" {
 			modelPtr := &m
-			updatedModel, cmd := modelPtr.handleServerBrowseUpdate(msg)
-			if updatedModel != nil {
-				if m2, ok := updatedModel.(model); ok {
-					m = m2
-				}
-			}
+			_, cmd := modelPtr.handleServerBrowseUpdate(msg)
 			return m, cmd
 		}
 		return m, nil
@@ -733,12 +664,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Forward the message to the player browse handler
 		if m.panelMode == "plex-players" {
 			modelPtr := &m
-			updatedModel, cmd := modelPtr.handlePlayerBrowseUpdate(msg)
-			if updatedModel != nil {
-				if m2, ok := updatedModel.(model); ok {
-					m = m2
-				}
-			}
+			_, cmd := modelPtr.handlePlayerBrowseUpdate(msg)
 			return m, cmd
 		}
 		return m, nil
@@ -746,21 +672,22 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// Update the appropriate list based on panel mode
 	var cmd tea.Cmd
-	if m.panelMode == "playback" {
+	switch m.panelMode {
+	case "playback":
 		m.playbackList, cmd = m.playbackList.Update(msg)
-	} else if m.panelMode == "plex-artists" {
+	case "plex-artists":
 		m.artistList, cmd = m.artistList.Update(msg)
-	} else if m.panelMode == "plex-artist-albums" {
+	case "plex-artist-albums":
 		m.artistAlbumList, cmd = m.artistAlbumList.Update(msg)
-	} else if m.panelMode == "plex-albums" {
+	case "plex-albums":
 		m.albumList, cmd = m.albumList.Update(msg)
-	} else if m.panelMode == "plex-album-tracks" || m.panelMode == "plex-playlist-tracks" {
+	case "plex-album-tracks", "plex-playlist-tracks":
 		m.trackList, cmd = m.trackList.Update(msg)
-	} else if m.panelMode == "plex-playlists" {
+	case "plex-playlists":
 		m.playlistList, cmd = m.playlistList.Update(msg)
-	} else if m.panelMode == "plex-servers" {
+	case "plex-servers":
 		m.serverList, cmd = m.serverList.Update(msg)
-	} else if m.panelMode == "plex-players" {
+	case "plex-players":
 		m.playerList, cmd = m.playerList.Update(msg)
 	}
 	return m, cmd
@@ -865,7 +792,7 @@ func (m *model) pollTimeline() tea.Cmd {
 				Volume:    0,
 			}
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 
 		data, err := io.ReadAll(resp.Body)
 		if err != nil {
@@ -976,10 +903,6 @@ func (m *model) beginPlaybackRefreshForTrack(pendingText, trackKey string) tea.C
 	return m.pollTimeline()
 }
 
-func (m *model) beginPlaybackPending(pendingText string) {
-	m.beginPlaybackPendingForTrack(pendingText, "")
-}
-
 func (m *model) beginPlaybackPendingForTrack(pendingText, trackKey string) {
 	if pendingText == "" {
 		pendingText = "Loading..."
@@ -1063,22 +986,4 @@ func (m *model) setVolume(v int) {
 	m.volume = v
 	url := fmt.Sprintf("http://%s:32500/player/playback/setParameters?volume=%d&commandID=1&type=music", m.selected, v)
 	go func() { _, _ = http.Get(url) }()
-}
-
-func (m *model) triggerPlaybackCmd(fullURL string) tea.Cmd {
-	if m.selected == "" {
-		return func() tea.Msg {
-			return playbackTriggeredMsg{success: false, err: fmt.Errorf("no server selected")}
-		}
-	}
-
-	serverIP := m.selected
-	shuffle := m.shuffle
-	return func() tea.Msg {
-		err := SendPlaybackURL(serverIP, fullURL, shuffle)
-		if err != nil {
-			return playbackTriggeredMsg{success: false, err: err}
-		}
-		return playbackTriggeredMsg{success: true}
-	}
 }

@@ -219,11 +219,13 @@ func (m *model) savePlaybackEdit() error {
 		return fmt.Errorf("metadata key cannot be empty")
 	}
 
-	config.FavsManager.Add(config.FavoriteItem{
+	if err := config.FavsManager.Add(config.FavoriteItem{
 		Name:        newName,
 		Type:        selectedType,
 		MetadataKey: newMetadataKey,
-	})
+	}); err != nil {
+		return err
+	}
 
 	allFavs, err := config.FavsManager.List()
 	if err != nil {

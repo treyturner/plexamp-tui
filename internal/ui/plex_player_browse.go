@@ -108,7 +108,7 @@ func (m *model) selectPlayerCmd(player playerItem) tea.Cmd {
 }
 
 func (m *model) handlePlayerBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
-	log.Debug(fmt.Sprintf("handlePlayerBrowseUpdate received message: %T", msg))
+	log.Debug("handlePlayerBrowseUpdate received message: %T", msg)
 
 	// If we're in filtering mode, let the list handle the input
 	if m.playerList.FilterState() == list.Filtering {
@@ -131,7 +131,7 @@ func (m *model) handlePlayerBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "enter":
 			// Select Server
 			if selected, ok := m.playerList.SelectedItem().(playerItem); ok {
-				log.Debug(fmt.Sprintf("Selecting player: %s (clientIdentifier: %s)", selected.title, selected.clientIdentifier))
+				log.Debug("Selecting player: %s (clientIdentifier: %s)", selected.title, selected.clientIdentifier)
 				m.lastCommand = fmt.Sprintf("Selecting %s", selected.title)
 				return m, m.selectPlayerCmd(selected)
 			}
@@ -151,11 +151,11 @@ func (m *model) handlePlayerBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case playersFetchedMsg:
-		log.Debug(fmt.Sprintf("playersFetchedMsg received with %d players, error: %v", len(msg.players), msg.err))
+		log.Debug("playersFetchedMsg received with %d players, error: %v", len(msg.players), msg.err)
 		if msg.err != nil {
 			errMsg := fmt.Sprintf("Error fetching players: %v", msg.err)
 			m.status = errMsg
-			log.Debug(errMsg)
+			log.Debug("%s", errMsg)
 			return m, nil
 		}
 
@@ -163,7 +163,7 @@ func (m *model) handlePlayerBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var items []list.Item
 		for i, player := range msg.players {
 			if i < 5 { // Only log first 5 servers to avoid log spam
-				log.Debug(fmt.Sprintf("Adding player %d: %s (ratingKey: %s)", i+1, player.Name, player.ClientIdentifier))
+				log.Debug("Adding player %d: %s (ratingKey: %s)", i+1, player.Name, player.ClientIdentifier)
 			}
 			items = append(items, playerItem{
 				title:            player.Name,
@@ -174,7 +174,7 @@ func (m *model) handlePlayerBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 			})
 		}
 
-		log.Debug(fmt.Sprintf("Creating new list with %d items", len(items)))
+		log.Debug("Creating new list with %d items", len(items))
 		// Create a new list with the fetched items
 		// Preserve the current filter state
 		filterState := m.playerList.FilterState()
@@ -194,7 +194,7 @@ func (m *model) handlePlayerBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.playerList.FilterInput.SetValue(filterValue)
 		}
 		m.status = fmt.Sprintf("Loaded %d players", len(msg.players))
-		log.Debug(fmt.Sprintf("Updated model with new player list. List has %d items", m.playerList.VisibleItems()))
+		log.Debug("Updated model with new player list. List has %d items", m.playerList.VisibleItems())
 
 		// Force a redraw
 		return m, tea.Batch(tea.ClearScreen, func() tea.Msg { return nil })

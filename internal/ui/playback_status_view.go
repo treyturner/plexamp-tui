@@ -96,29 +96,6 @@ func (m *model) adjustVolume(delta int) tea.Cmd {
 	return m.pollTimeline()
 }
 
-// seek seeks the current track by the specified number of seconds
-func (m *model) seek(seconds int) tea.Cmd {
-	// Calculate the new position in milliseconds
-	newPos := m.positionMs + (seconds * 1000)
-
-	// Ensure the position is within bounds
-	if newPos < 0 {
-		newPos = 0
-	} else if m.durationMs > 0 && newPos > m.durationMs {
-		newPos = m.durationMs
-	}
-
-	// Send the seek command with absolute position
-	m.sendCommand(fmt.Sprintf("playback/seekTo?time=%d", newPos))
-	m.lastCommand = fmt.Sprintf("Seek to %s", formatTime(newPos))
-
-	// Update the position immediately for better UX
-	m.positionMs = newPos
-	m.lastUpdate = time.Now()
-
-	return m.pollTimeline()
-}
-
 // toggleShuffle toggles shuffle mode
 func (m *model) toggleShuffle() tea.Cmd {
 	m.shuffle = !m.shuffle
@@ -145,7 +122,11 @@ func (m *model) cycleLibrary() tea.Cmd {
 				m.config.PlexLibraryID = m.config.PlexLibraries[i+1].Key
 				m.config.PlexLibraryName = m.config.PlexLibraries[i+1].Title
 			}
-			cfgManager.Save(m.config)
+			if err := cfgManager.Save(m.config); err != nil {
+				m.status = "Error saving library selection: " + err.Error()
+				m.lastCommand = "Library Selection Save Failed"
+				return nil
+			}
 			// Return a command that will refresh the current panel
 			return m.refreshCurrentPanel()
 		}

@@ -203,7 +203,7 @@ func (m *model) playTrackCmd(ratingKey string, requestID int) tea.Cmd {
 }
 
 func (m *model) handleTrackBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
-	log.Debug(fmt.Sprintf("handleTrackBrowseUpdate received message: %T", msg))
+	log.Debug("handleTrackBrowseUpdate received message: %T", msg)
 
 	if m.trackList.FilterState() == list.Filtering {
 		var cmd tea.Cmd
@@ -227,7 +227,7 @@ func (m *model) handleTrackBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 					log.Debug("Ignoring track playback for item without rating key")
 					return m, nil
 				}
-				log.Debug(fmt.Sprintf("Playing track: %s (ratingKey: %s)", selected.title, selected.ratingKey))
+				log.Debug("Playing track: %s (ratingKey: %s)", selected.title, selected.ratingKey)
 				m.lastCommand = fmt.Sprintf("Playing %s", selected.title)
 				m.trackPlaybackReqID++
 				requestID := m.trackPlaybackReqID
@@ -243,39 +243,39 @@ func (m *model) handleTrackBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case tracksFetchedMsg:
-		log.Debug(fmt.Sprintf(
+		log.Debug(
 			"tracksFetchedMsg received with %d tracks, context=%s, requestKey=%s, error=%v",
-			len(msg.tracks), msg.context, msg.requestKey, msg.err),
+			len(msg.tracks), msg.context, msg.requestKey, msg.err,
 		)
 
 		switch msg.context {
 		case "album":
 			// Ignore stale/mismatched fetches so late responses cannot overwrite the active browse list.
 			if m.panelMode != "plex-album-tracks" || msg.requestKey != m.currentAlbumKey {
-				log.Debug(fmt.Sprintf(
+				log.Debug(
 					"Ignoring stale album track response (requestKey=%s, currentAlbumKey=%s, panelMode=%s)",
-					msg.requestKey, m.currentAlbumKey, m.panelMode),
+					msg.requestKey, m.currentAlbumKey, m.panelMode,
 				)
 				return m, nil
 			}
 		case "playlist":
 			// Ignore stale/mismatched fetches so late responses cannot overwrite the active browse list.
 			if m.panelMode != "plex-playlist-tracks" || msg.requestKey != m.currentPlaylistKey {
-				log.Debug(fmt.Sprintf(
+				log.Debug(
 					"Ignoring stale playlist track response (requestKey=%s, currentPlaylistKey=%s, panelMode=%s)",
-					msg.requestKey, m.currentPlaylistKey, m.panelMode),
+					msg.requestKey, m.currentPlaylistKey, m.panelMode,
 				)
 				return m, nil
 			}
 		default:
-			log.Debug(fmt.Sprintf("Ignoring track response with unknown context: %s", msg.context))
+			log.Debug("Ignoring track response with unknown context: %s", msg.context)
 			return m, nil
 		}
 
 		if msg.err != nil {
 			errMsg := fmt.Sprintf("Error fetching tracks: %v", msg.err)
 			m.status = errMsg
-			log.Debug(errMsg)
+			log.Debug("%s", errMsg)
 			return m, nil
 		}
 

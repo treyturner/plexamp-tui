@@ -13,7 +13,7 @@ import (
 // =====================
 
 func (m *model) triggerFavoriteRadioPlayback(item config.FavoriteItem) tea.Cmd {
-	log.Debug(fmt.Sprintf("Triggering radio playback for %s", item.Name))
+	log.Debug("Triggering radio playback for %s", item.Name)
 	if m.selected == "" {
 		return func() tea.Msg {
 			return playbackTriggeredMsg{success: false, err: fmt.Errorf("no server selected")}
@@ -32,7 +32,7 @@ func (m *model) triggerFavoriteRadioPlayback(item config.FavoriteItem) tea.Cmd {
 }
 
 func (m *model) triggerFavoritePlayback(item config.FavoriteItem) tea.Cmd {
-	log.Debug(fmt.Sprintf("Triggering playback for %s", item.Name))
+	log.Debug("Triggering playback for %s", item.Name)
 	if m.selected == "" {
 		return func() tea.Msg {
 			return playbackTriggeredMsg{success: false, err: fmt.Errorf("no server selected")}
@@ -49,16 +49,16 @@ func (m *model) triggerFavoritePlayback(item config.FavoriteItem) tea.Cmd {
 	m.lastCommand = fmt.Sprintf("Playing %s", item.Name)
 	switch item.Type {
 	case "artist":
-		log.Debug(fmt.Sprintf("Playing artist: %s", item.Name))
+		log.Debug("Playing artist: %s", item.Name)
 		return m.playArtistCmd(item.MetadataKey)
 	case "album":
-		log.Debug(fmt.Sprintf("Playing album: %s", item.Name))
+		log.Debug("Playing album: %s", item.Name)
 		return m.playAlbumCmd(item.MetadataKey)
 	case "playlist":
-		log.Debug(fmt.Sprintf("Playing playlist: %s", item.Name))
+		log.Debug("Playing playlist: %s", item.Name)
 		return m.playPlaylistCmd(item.MetadataKey)
 	default:
-		log.Debug(fmt.Sprintf("Unknown type: %s", item.Type))
+		log.Debug("Unknown type: %s", item.Type)
 		return func() tea.Msg {
 			return playbackTriggeredMsg{success: false, err: fmt.Errorf("unknown type: %s", item.Type)}
 		}
@@ -86,7 +86,7 @@ func (m *model) findFavoriteItem(selected item) (config.FavoriteItem, bool) {
 
 func (m *model) openFavoriteItem(item config.FavoriteItem) tea.Cmd {
 	if item.MetadataKey == "" {
-		log.Debug(fmt.Sprintf("Cannot open favorite %s (%s): missing metadata key", item.Name, item.Type))
+		log.Debug("Cannot open favorite %s (%s): missing metadata key", item.Name, item.Type)
 		m.status = fmt.Sprintf("Cannot open %s: missing metadata key", item.Name)
 		return nil
 	}
@@ -116,17 +116,23 @@ func (m *model) openFavoriteItem(item config.FavoriteItem) tea.Cmd {
 }
 
 func (m *model) addRemoveFavorite(name string, k string, t string) (tea.Model, tea.Cmd) {
-	log.Debug(fmt.Sprintf("Toggling favorite for %s", name))
+	log.Debug("Toggling favorite for %s", name)
 	favSet := m.getCurrentFavSet()
 	if _, exists := favSet[k]; exists {
-		log.Debug(fmt.Sprintf("Removing favorite: %s", name))
+		log.Debug("Removing favorite: %s", name)
 		// Delete selected playback item
 		index := m.playbackList.Index()
-		m.deletePlaybackItem(index)
+		if err := m.deletePlaybackItem(index); err != nil {
+			m.status = "Error removing favorite: " + err.Error()
+			m.lastCommand = "Favorite Remove Failed"
+		}
 		return m, nil
 	}
-	log.Debug(fmt.Sprintf("Adding favorite: %s", name))
-	m.savePlaybackItem(name, k, t)
+	log.Debug("Adding favorite: %s", name)
+	if err := m.savePlaybackItem(name, k, t); err != nil {
+		m.status = "Error adding favorite: " + err.Error()
+		m.lastCommand = "Favorite Add Failed"
+	}
 	return m, nil
 }
 
