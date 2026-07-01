@@ -3,20 +3,30 @@ package ui
 import "time"
 
 type playbackState struct {
-	isPlaying         bool
-	currentTrack      string
-	currentTrackKey   string
-	volume            int
-	durationMs        int
-	positionMs        int
-	lastUpdate        time.Time
-	suppressTimeline  bool
-	timelineRequestID int
-	pendingTrackKey   string
-	pendingTrackUntil time.Time
-	ignoreTrackKey    string
-	ignoreTrackPosMs  int
-	ignoreTrackUntil  time.Time
+	isPlaying                bool
+	toggleCommandID          int
+	pendingToggleCommandID   int
+	pendingToggleBasePlaying bool
+	acknowledgedPlaying      bool
+	acknowledgedToggleID     int
+	currentTrack             string
+	currentTrackKey          string
+	volume                   int
+	volumeCommandID          int
+	pendingVolumeCommandID   int
+	pendingVolumeBase        int
+	acknowledgedVolume       int
+	acknowledgedVolumeID     int
+	durationMs               int
+	positionMs               int
+	lastUpdate               time.Time
+	suppressTimeline         bool
+	timelineRequestID        int
+	pendingTrackKey          string
+	pendingTrackUntil        time.Time
+	ignoreTrackKey           string
+	ignoreTrackPosMs         int
+	ignoreTrackUntil         time.Time
 }
 
 func (p playbackState) currentPosition(now time.Time) int {
@@ -173,10 +183,14 @@ func (p *playbackState) applyTimeline(msg trackMsgWithState, now time.Time, debu
 
 	p.currentTrack = msg.TrackText
 	p.currentTrackKey = msg.TrackKey
-	p.isPlaying = msg.IsPlaying
+	if p.pendingToggleCommandID == 0 {
+		p.isPlaying = msg.IsPlaying
+	}
 	p.durationMs = msg.Duration
 	p.positionMs = msg.Position
-	p.volume = msg.Volume
+	if p.pendingVolumeCommandID == 0 {
+		p.volume = msg.Volume
+	}
 	p.lastUpdate = now
 	return true
 }

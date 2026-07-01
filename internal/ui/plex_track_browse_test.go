@@ -100,6 +100,165 @@ func TestTrackPlaybackMsgAppliesLatestResponse(t *testing.T) {
 	}
 }
 
+func TestTrackPlaybackMsgFromPreviousPlayerIsIgnored(t *testing.T) {
+	initTestLogger(t)
+
+	m := model{
+		selected:           "player-b",
+		trackPlaybackReqID: 2,
+		playback: playbackState{
+			currentTrack: "Existing Track",
+		},
+		status:      "existing",
+		lastCommand: "existing",
+	}
+
+	updatedModel, cmd := m.Update(trackPlaybackMsg{
+		success:   true,
+		selected:  "player-a",
+		requestID: 2,
+		ratingKey: "new-track",
+	})
+	if cmd != nil {
+		t.Fatalf("expected no command for old-player track playback response, got non-nil")
+	}
+
+	updated := updatedModel.(model)
+	if updated.playback.currentTrack != "Existing Track" {
+		t.Fatalf("expected current track to remain unchanged, got %q", updated.playback.currentTrack)
+	}
+	if updated.status != "existing" {
+		t.Fatalf("expected status to remain unchanged, got %q", updated.status)
+	}
+	if updated.lastCommand != "existing" {
+		t.Fatalf("expected lastCommand to remain unchanged, got %q", updated.lastCommand)
+	}
+}
+
+func TestTrackPlaybackFailureUsesEarlierSuccessFromCurrentBurst(t *testing.T) {
+	initTestLogger(t)
+
+	m := model{
+		selected:           "player-a",
+		trackPlaybackReqID: 2,
+		playback: playbackState{
+			timelineRequestID: 3,
+		},
+	}
+
+	updatedModel, cmd := m.Update(trackPlaybackMsg{
+		success:   true,
+		selected:  "player-a",
+		requestID: 1,
+		ratingKey: "track-a",
+	})
+	if cmd != nil {
+		t.Fatalf("expected stale track playback success to be acknowledged without command")
+	}
+
+	updated := updatedModel.(model)
+	if updated.ackTrackPlaybackReqID != 1 {
+		t.Fatalf("expected acknowledged track playback request id to be 1, got %d", updated.ackTrackPlaybackReqID)
+	}
+	if updated.ackTrackPlaybackKey != "track-a" {
+		t.Fatalf("expected acknowledged track key track-a, got %q", updated.ackTrackPlaybackKey)
+	}
+
+	updatedModel, cmd = updated.Update(trackPlaybackMsg{
+		success:   false,
+		selected:  "player-a",
+		requestID: 2,
+		ratingKey: "track-b",
+		err:       errors.New("request failed"),
+	})
+	if cmd == nil {
+		t.Fatalf("expected timeline refresh after latest track request failed with earlier success acknowledged")
+	}
+
+	updated = updatedModel.(model)
+	if updated.lastCommand != "Track Playback Started" {
+		t.Fatalf("expected track playback started marker, got %q", updated.lastCommand)
+	}
+	if updated.status != "Playback triggered successfully" {
+		t.Fatalf("expected playback success status, got %q", updated.status)
+	}
+	if updated.playback.pendingTrackKey != "track-a" {
+		t.Fatalf("expected pending track key to use acknowledged track-a, got %q", updated.playback.pendingTrackKey)
+	}
+}
+
+func TestTrackPlaybackRequestClearsEarlierAcknowledgedSuccess(t *testing.T) {
+	initTestLogger(t)
+
+	now := time.Now()
+	m := model{
+		selected:              "player-a",
+		trackPlaybackReqID:    1,
+		ackTrackPlaybackReqID: 1,
+		ackTrackPlaybackKey:   "track-a",
+		playback: playbackState{
+			timelineRequestID: 3,
+			currentTrack:      "Loading track...",
+			currentTrackKey:   "old-key",
+			isPlaying:         true,
+			durationMs:        123000,
+			positionMs:        45000,
+			lastUpdate:        now,
+			suppressTimeline:  true,
+			pendingTrackKey:   "track-b",
+			pendingTrackUntil: now.Add(8 * time.Second),
+		},
+	}
+
+	requestID := m.nextTrackPlaybackRequestID()
+	if requestID != 2 {
+		t.Fatalf("expected new track playback request id 2, got %d", requestID)
+	}
+	if m.ackTrackPlaybackReqID != 0 {
+		t.Fatalf("expected new track playback request to clear acknowledged id, got %d", m.ackTrackPlaybackReqID)
+	}
+	if m.ackTrackPlaybackKey != "" {
+		t.Fatalf("expected new track playback request to clear acknowledged key, got %q", m.ackTrackPlaybackKey)
+	}
+
+	updatedModel, cmd := m.Update(trackPlaybackMsg{
+		success:   false,
+		selected:  "player-a",
+		requestID: requestID,
+		ratingKey: "track-b",
+		err:       errors.New("request failed"),
+	})
+	if cmd != nil {
+		t.Fatalf("expected failed new track playback request to return no command")
+	}
+
+	updated := updatedModel.(model)
+	if updated.lastCommand != "Playback Failed" {
+		t.Fatalf("expected playback failed marker, got %q", updated.lastCommand)
+	}
+	if updated.status != "Playback error: request failed" {
+		t.Fatalf("expected playback failure status, got %q", updated.status)
+	}
+	if updated.playback.currentTrack != "" {
+		t.Fatalf("expected failed latest request to clear current track, got %q", updated.playback.currentTrack)
+	}
+	if updated.playback.currentTrackKey != "" {
+		t.Fatalf("expected failed latest request to clear current track key, got %q", updated.playback.currentTrackKey)
+	}
+	if updated.playback.isPlaying {
+		t.Fatalf("expected failed latest request to clear playing state")
+	}
+	if updated.playback.durationMs != 0 {
+		t.Fatalf("expected failed latest request to clear duration, got %d", updated.playback.durationMs)
+	}
+	if updated.playback.positionMs != 0 {
+		t.Fatalf("expected failed latest request to clear position, got %d", updated.playback.positionMs)
+	}
+	if updated.playback.pendingTrackKey != "" {
+		t.Fatalf("expected failed latest request to clear pending track key, got %q", updated.playback.pendingTrackKey)
+	}
+}
+
 func TestTimelineUpdateClearsPendingOnNonRequestedTrackKey(t *testing.T) {
 	initTestLogger(t)
 

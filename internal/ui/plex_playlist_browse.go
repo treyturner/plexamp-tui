@@ -143,14 +143,15 @@ func (m *model) playPlaylistCmd(ratingKey string) tea.Cmd {
 	serverIP := m.selected
 	serverID := m.config.ServerID
 	shuffle := m.shuffle
+	requestID := m.nextPlaybackRequestID()
 	deps := m.deps
 
 	return func() tea.Msg {
 		err := PlayPlaylist(serverIP, serverID, ratingKey, shuffle, deps)
 		if err != nil {
-			return playbackTriggeredMsg{success: false, err: err}
+			return playbackTriggeredMsg{success: false, selected: serverIP, requestID: requestID, err: err}
 		}
-		return playbackTriggeredMsg{success: true}
+		return playbackTriggeredMsg{success: true, selected: serverIP, requestID: requestID}
 	}
 }
 
