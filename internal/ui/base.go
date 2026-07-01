@@ -3,6 +3,7 @@ package ui
 
 import (
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -37,32 +38,41 @@ func (i item) GetMetadataKey() string { return i.MetadataKey }
 type model struct {
 	deps uiDeps
 
-	playbackList          list.Model
-	artistList            list.Model // Plex artist browse list
-	artistAlbumList       list.Model // Plex artist album browse list
-	albumList             list.Model // Plex album browse list
-	trackList             list.Model // Plex track browse list
-	playlistList          list.Model // Plex playlist browse list
-	serverList            list.Model // Plex server browse list
-	playerList            list.Model // Plex player browse list
-	selected              string
-	status                string
-	width                 int
-	height                int
-	playback              playbackState
-	lastCommand           string
-	usingDefaultCfg       bool
-	shuffle               bool // Tracks shuffle state
-	plexAuthenticated     bool // Plex authentication status
-	trackPlaybackReqID    int
-	currentArtistKey      string
-	currentArtistName     string
-	artistAlbumReturnMode string
-	currentAlbumKey       string
-	currentAlbumName      string
-	currentPlaylistKey    string
-	currentPlaylistName   string
-	trackReturnMode       string
+	playbackList            list.Model
+	artistList              list.Model // Plex artist browse list
+	artistAlbumList         list.Model // Plex artist album browse list
+	albumList               list.Model // Plex album browse list
+	trackList               list.Model // Plex track browse list
+	playlistList            list.Model // Plex playlist browse list
+	serverList              list.Model // Plex server browse list
+	playerList              list.Model // Plex player browse list
+	selected                string
+	status                  string
+	width                   int
+	height                  int
+	playback                playbackState
+	lastCommand             string
+	usingDefaultCfg         bool
+	shuffle                 bool // Tracks shuffle state
+	shuffleCommandID        int
+	pendingShuffleCommandID int
+	pendingShuffleBase      bool
+	acknowledgedShuffle     bool
+	acknowledgedShuffleID   int
+	plexAuthenticated       bool // Plex authentication status
+	playbackRequestID       int
+	ackPlaybackRequestID    int
+	trackPlaybackReqID      int
+	ackTrackPlaybackReqID   int
+	ackTrackPlaybackKey     string
+	currentArtistKey        string
+	currentArtistName       string
+	artistAlbumReturnMode   string
+	currentAlbumKey         string
+	currentAlbumName        string
+	currentPlaylistKey      string
+	currentPlaylistName     string
+	trackReturnMode         string
 
 	// Panel mode: "servers", "playback", "edit", "plex-servers", "plex-libraries", "plex-artists",
 	// "plex-artist-albums", "plex-albums", "plex-album-tracks", "plex-playlists", "plex-playlist-tracks"
@@ -105,6 +115,7 @@ type (
 )
 
 type trackMsgWithState struct {
+	Selected  string
 	TrackText string
 	TrackKey  string
 	IsPlaying bool
@@ -115,8 +126,36 @@ type trackMsgWithState struct {
 }
 
 type playbackTriggeredMsg struct {
-	success bool
-	err     error
+	success   bool
+	selected  string
+	requestID int
+	err       error
+}
+
+type playbackControlAction int
+
+const (
+	playbackControlToggle playbackControlAction = iota
+	playbackControlNext
+	playbackControlPrevious
+	playbackControlVolume
+	playbackControlShuffle
+)
+
+var errNoPlayerSelected = errors.New("no Plexamp instance selected")
+
+type playbackControlMsg struct {
+	action           playbackControlAction
+	path             string
+	selected         string
+	isPlaying        bool
+	toggleCommandID  int
+	volume           int
+	volumeCommandID  int
+	shuffle          bool
+	shuffleCommandID int
+	poll             bool
+	err              error
 }
 
 type UiManager struct {
@@ -260,6 +299,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if msg.success {
+			if msg.player.address != m.selected {
+				m.clearPendingPlaybackControls()
+			}
 			m.config.SelectedPlayer = msg.player.address
 			m.config.SelectedPlayerName = msg.player.title
 			m.selected = msg.player.address
@@ -475,6 +517,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(m.pollTimeline(), tick())
 
 	case trackMsgWithState:
+		if msg.Selected != "" && msg.Selected != m.selected {
+			return m, nil
+		}
 		m.playback.applyTimeline(msg, time.Now(), m.debug)
 		return m, nil
 
@@ -486,14 +531,57 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.status = fmt.Sprintf("Error: %v", msg.err)
 		return m, nil
 
+	case playbackControlMsg:
+		if msg.selected != m.selected {
+			return m, nil
+		}
+
+		m.recordPlaybackControlAck(msg)
+		if m.isStalePlaybackControl(msg) {
+			return m, nil
+		}
+
+		if msg.err != nil {
+			m.rollbackFailedPlaybackControl(msg)
+			if errors.Is(msg.err, errNoPlayerSelected) {
+				m.status = "No Plexamp instance selected"
+			} else {
+				m.status = fmt.Sprintf("Error: %v", msg.err)
+			}
+			return m, nil
+		}
+
+		m.applyPlaybackControl(msg)
+
+		m.status = fmt.Sprintf("[%s] Sent %s", msg.selected, msg.path)
+		if msg.poll {
+			return m, m.pollTimeline()
+		}
+		return m, nil
+
 	case playbackTriggeredMsg:
+		if msg.selected != "" && msg.selected != m.selected {
+			return m, nil
+		}
+		if msg.success && msg.requestID != 0 && msg.requestID > m.ackPlaybackRequestID {
+			m.ackPlaybackRequestID = msg.requestID
+		}
+		if msg.requestID != 0 && msg.requestID != m.playbackRequestID {
+			return m, nil
+		}
+
 		if msg.success {
 			// Invalidate in-flight track playback responses when generic playback starts.
-			m.trackPlaybackReqID++
+			m.nextTrackPlaybackRequestID()
 			m.lastCommand = "Playback Started"
 			m.status = "Playback triggered successfully"
 			return m, m.beginPlaybackRefresh("")
 		} else {
+			if msg.requestID != 0 && m.ackPlaybackRequestID != 0 {
+				m.lastCommand = "Playback Started"
+				m.status = "Playback triggered successfully"
+				return m, m.beginPlaybackRefresh("")
+			}
 			m.lastCommand = "Playback Failed"
 			m.status = fmt.Sprintf("Playback error: %v", msg.err)
 		}
@@ -534,6 +622,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case trackPlaybackMsg:
+		if msg.selected != "" && msg.selected != m.selected {
+			return m, nil
+		}
+		if msg.success && msg.requestID > m.ackTrackPlaybackReqID {
+			m.ackTrackPlaybackReqID = msg.requestID
+			m.ackTrackPlaybackKey = msg.ratingKey
+		}
 		if msg.requestID != m.trackPlaybackReqID {
 			m.debug(
 				"Ignoring stale trackPlaybackMsg (requestID=%d, current=%d)",
@@ -550,6 +645,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		m.lastCommand = "Playback Failed"
 		m.status = fmt.Sprintf("Playback error: %v", msg.err)
+		if m.ackTrackPlaybackReqID != 0 {
+			m.lastCommand = "Track Playback Started"
+			m.status = "Playback triggered successfully"
+			return m, m.beginPlaybackRefreshForTrack("", m.ackTrackPlaybackKey)
+		}
 		m.playback.clearAfterFailure()
 		return m, nil
 
@@ -665,21 +765,191 @@ func max(a, b int) int {
 // Plexamp control logic
 // =====================
 
-func (m *model) sendCommand(path string) {
-	if m.selected == "" {
-		m.status = "No Plexamp instance selected"
+func playbackControlCmd(selected, path string, msg playbackControlMsg) tea.Cmd {
+	msg.selected = selected
+	msg.path = path
+
+	return func() tea.Msg {
+		if selected == "" {
+			msg.err = errNoPlayerSelected
+			return msg
+		}
+
+		url := fmt.Sprintf("http://%s:32500/player/%s", selected, path)
+		resp, err := http.Get(url)
+		if err != nil {
+			msg.err = err
+			return msg
+		}
+		defer func() { _ = resp.Body.Close() }()
+
+		if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
+			msg.err = fmt.Errorf("server returned status %d", resp.StatusCode)
+		}
+		return msg
+	}
+}
+
+func (m *model) recordPlaybackControlAck(msg playbackControlMsg) {
+	if msg.err != nil {
 		return
 	}
-	url := fmt.Sprintf("http://%s:32500/player/%s", m.selected, path)
-	go func() {
-		_, err := http.Get(url)
-		if err != nil {
-			m.status = fmt.Sprintf("Error: %v", err)
-		} else {
-			m.status = fmt.Sprintf("[%s] Sent %s", m.selected, path)
+
+	switch msg.action {
+	case playbackControlToggle:
+		if msg.toggleCommandID > m.playback.acknowledgedToggleID {
+			m.playback.acknowledgedPlaying = msg.isPlaying
+			m.playback.acknowledgedToggleID = msg.toggleCommandID
 		}
-	}()
-	time.Sleep(50 * time.Millisecond)
+	case playbackControlVolume:
+		if msg.volumeCommandID > m.playback.acknowledgedVolumeID {
+			m.playback.acknowledgedVolume = msg.volume
+			m.playback.acknowledgedVolumeID = msg.volumeCommandID
+		}
+	case playbackControlShuffle:
+		if msg.shuffleCommandID > m.acknowledgedShuffleID {
+			m.acknowledgedShuffle = msg.shuffle
+			m.acknowledgedShuffleID = msg.shuffleCommandID
+		}
+	}
+}
+
+func (m model) isStalePlaybackControl(msg playbackControlMsg) bool {
+	switch msg.action {
+	case playbackControlToggle:
+		return stalePlaybackControlID(
+			msg.toggleCommandID,
+			m.playback.pendingToggleCommandID,
+			m.playback.acknowledgedToggleID,
+			msg.err,
+		)
+	case playbackControlVolume:
+		return stalePlaybackControlID(
+			msg.volumeCommandID,
+			m.playback.pendingVolumeCommandID,
+			m.playback.acknowledgedVolumeID,
+			msg.err,
+		)
+	case playbackControlShuffle:
+		return stalePlaybackControlID(
+			msg.shuffleCommandID,
+			m.pendingShuffleCommandID,
+			m.acknowledgedShuffleID,
+			msg.err,
+		)
+	default:
+		return false
+	}
+}
+
+func stalePlaybackControlID(id, pendingID, acknowledgedID int, err error) bool {
+	if id == 0 || id == pendingID {
+		return false
+	}
+	if pendingID == 0 && err == nil && id == acknowledgedID {
+		return false
+	}
+	return true
+}
+
+func (m *model) rollbackFailedPlaybackControl(msg playbackControlMsg) {
+	switch msg.action {
+	case playbackControlToggle:
+		if msg.toggleCommandID == 0 {
+			return
+		}
+		if m.playback.acknowledgedToggleID != 0 {
+			m.playback.isPlaying = m.playback.acknowledgedPlaying
+		} else {
+			m.playback.isPlaying = m.playback.pendingToggleBasePlaying
+		}
+		m.playback.pendingToggleCommandID = 0
+	case playbackControlVolume:
+		if msg.volumeCommandID == 0 {
+			return
+		}
+		if m.playback.acknowledgedVolumeID != 0 {
+			m.playback.volume = m.playback.acknowledgedVolume
+		} else {
+			m.playback.volume = m.playback.pendingVolumeBase
+		}
+		m.playback.pendingVolumeCommandID = 0
+	case playbackControlShuffle:
+		if msg.shuffleCommandID == 0 {
+			return
+		}
+		if m.acknowledgedShuffleID != 0 {
+			m.shuffle = m.acknowledgedShuffle
+		} else {
+			m.shuffle = m.pendingShuffleBase
+		}
+		m.pendingShuffleCommandID = 0
+	}
+}
+
+func (m *model) applyPlaybackControl(msg playbackControlMsg) {
+	switch msg.action {
+	case playbackControlToggle:
+		if msg.toggleCommandID != 0 {
+			m.playback.pendingToggleCommandID = 0
+		}
+		m.playback.isPlaying = msg.isPlaying
+		if msg.isPlaying {
+			m.lastCommand = "Play"
+		} else {
+			m.lastCommand = "Pause"
+		}
+	case playbackControlNext:
+		m.lastCommand = "Next"
+	case playbackControlPrevious:
+		m.playback.restartPrevious(time.Now())
+		m.lastCommand = "Previous"
+	case playbackControlVolume:
+		if msg.volumeCommandID != 0 {
+			m.playback.pendingVolumeCommandID = 0
+		}
+		m.playback.volume = msg.volume
+		m.lastCommand = fmt.Sprintf("Volume %d%%", msg.volume)
+	case playbackControlShuffle:
+		if msg.shuffleCommandID != 0 {
+			m.pendingShuffleCommandID = 0
+		}
+		m.shuffle = msg.shuffle
+		if msg.shuffle {
+			m.lastCommand = "Shuffle ON"
+		} else {
+			m.lastCommand = "Shuffle OFF"
+		}
+	}
+}
+
+func (m *model) clearPendingPlaybackControls() {
+	m.playback.pendingToggleCommandID = 0
+	m.playback.pendingVolumeCommandID = 0
+	m.playback.acknowledgedToggleID = 0
+	m.playback.acknowledgedVolumeID = 0
+	m.pendingShuffleCommandID = 0
+	m.acknowledgedShuffle = false
+	m.acknowledgedShuffleID = 0
+	m.playbackRequestID++
+	m.ackPlaybackRequestID = 0
+	m.trackPlaybackReqID++
+	m.ackTrackPlaybackReqID = 0
+	m.ackTrackPlaybackKey = ""
+	m.playback.timelineRequestID++
+}
+
+func (m *model) nextPlaybackRequestID() int {
+	m.playbackRequestID++
+	m.ackPlaybackRequestID = 0
+	return m.playbackRequestID
+}
+
+func (m *model) nextTrackPlaybackRequestID() int {
+	m.trackPlaybackReqID++
+	m.ackTrackPlaybackReqID = 0
+	m.ackTrackPlaybackKey = ""
+	return m.trackPlaybackReqID
 }
 
 func (m *model) pollTimeline() tea.Cmd {
@@ -694,6 +964,7 @@ func (m *model) pollTimeline() tea.Cmd {
 		resp, err := http.Get(url)
 		if err != nil {
 			return trackMsgWithState{
+				Selected:  selected,
 				RequestID: reqID,
 				TrackText: "",
 				TrackKey:  "",
@@ -708,6 +979,7 @@ func (m *model) pollTimeline() tea.Cmd {
 		data, err := io.ReadAll(resp.Body)
 		if err != nil {
 			return trackMsgWithState{
+				Selected:  selected,
 				RequestID: reqID,
 				TrackText: "",
 				TrackKey:  "",
@@ -721,6 +993,7 @@ func (m *model) pollTimeline() tea.Cmd {
 		var mc MediaContainer
 		if err := xml.Unmarshal(data, &mc); err != nil {
 			return trackMsgWithState{
+				Selected:  selected,
 				RequestID: reqID,
 				TrackText: "",
 				TrackKey:  "",
@@ -761,6 +1034,7 @@ func (m *model) pollTimeline() tea.Cmd {
 		}
 
 		return trackMsgWithState{
+			Selected:  selected,
 			TrackText: track,
 			TrackKey:  trackKey,
 			IsPlaying: isPlaying,
@@ -830,14 +1104,4 @@ func progressBar(pos, dur, width int) string {
 	}
 	bar += "]"
 	return bar
-}
-
-// setVolume sets the volume directly to the specified value (0-100)
-func (m *model) setVolume(v int) {
-	if m.selected == "" {
-		return
-	}
-	m.playback.volume = v
-	url := fmt.Sprintf("http://%s:32500/player/playback/setParameters?volume=%d&commandID=1&type=music", m.selected, v)
-	go func() { _, _ = http.Get(url) }()
 }

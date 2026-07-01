@@ -2,7 +2,6 @@ package ui
 
 import (
 	"fmt"
-	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -44,34 +43,49 @@ func (m model) playbackStatusView() string {
 
 // togglePlayback toggles between play and pause
 func (m *model) togglePlayback() tea.Cmd {
-	if m.playback.isPlaying {
-		m.sendCommand("playback/pause")
-		m.playback.isPlaying = false
-		m.lastCommand = "Pause"
-	} else {
-		m.sendCommand("playback/play")
-		m.playback.isPlaying = true
-		m.lastCommand = "Play"
+	previousPlaying := m.playback.isPlaying
+	nextPlaying := !previousPlaying
+
+	path := "playback/play"
+	if previousPlaying {
+		path = "playback/pause"
 	}
-	return m.pollTimeline()
+
+	var toggleCommandID int
+	if m.selected != "" {
+		if m.playback.pendingToggleCommandID == 0 {
+			m.playback.pendingToggleBasePlaying = previousPlaying
+			m.playback.acknowledgedPlaying = previousPlaying
+			m.playback.acknowledgedToggleID = 0
+		}
+		m.playback.isPlaying = nextPlaying
+		m.playback.toggleCommandID++
+		toggleCommandID = m.playback.toggleCommandID
+		m.playback.pendingToggleCommandID = toggleCommandID
+	}
+
+	return playbackControlCmd(m.selected, path, playbackControlMsg{
+		action:          playbackControlToggle,
+		isPlaying:       nextPlaying,
+		toggleCommandID: toggleCommandID,
+		poll:            true,
+	})
 }
 
 // nextTrack skips to the next track
 func (m *model) nextTrack() tea.Cmd {
-	m.sendCommand("playback/skipNext")
-	m.lastCommand = "Next"
-	return m.pollTimeline()
+	return playbackControlCmd(m.selected, "playback/skipNext", playbackControlMsg{
+		action: playbackControlNext,
+		poll:   true,
+	})
 }
 
 // previousTrack goes to the previous track
 func (m *model) previousTrack() tea.Cmd {
-	// "Previous" acts as restart when we're past the rewind threshold; reset UI immediately
-	// and invalidate any in-flight poll responses captured before this command.
-	m.playback.restartPrevious(time.Now())
-
-	m.sendCommand("playback/skipPrevious")
-	m.lastCommand = "Previous"
-	return m.pollTimeline()
+	return playbackControlCmd(m.selected, "playback/skipPrevious", playbackControlMsg{
+		action: playbackControlPrevious,
+		poll:   true,
+	})
 }
 
 // adjustVolume changes the volume by the specified delta (range: -100 to +100)
@@ -83,27 +97,54 @@ func (m *model) adjustVolume(delta int) tea.Cmd {
 		newVol = 100
 	}
 
-	// Use setVolume to handle the actual volume change
-	m.setVolume(newVol)
+	var volumeCommandID int
+	if m.selected != "" {
+		if m.playback.pendingVolumeCommandID == 0 {
+			m.playback.pendingVolumeBase = m.playback.volume
+			m.playback.acknowledgedVolume = m.playback.volume
+			m.playback.acknowledgedVolumeID = 0
+		}
+		m.playback.volume = newVol
+		m.playback.volumeCommandID++
+		volumeCommandID = m.playback.volumeCommandID
+		m.playback.pendingVolumeCommandID = volumeCommandID
+	}
 
-	// Update the status message
-	m.lastCommand = fmt.Sprintf("Volume %d%%", newVol)
-
-	// Return a command to update the timeline
-	return m.pollTimeline()
+	path := fmt.Sprintf("playback/setParameters?volume=%d&commandID=1&type=music", newVol)
+	return playbackControlCmd(m.selected, path, playbackControlMsg{
+		action:          playbackControlVolume,
+		volume:          newVol,
+		volumeCommandID: volumeCommandID,
+		poll:            true,
+	})
 }
 
 // toggleShuffle toggles shuffle mode
 func (m *model) toggleShuffle() tea.Cmd {
-	m.shuffle = !m.shuffle
-	if m.shuffle {
-		m.sendCommand("playback/shuffle/on")
-		m.lastCommand = "Shuffle ON"
-	} else {
-		m.sendCommand("playback/shuffle/off")
-		m.lastCommand = "Shuffle OFF"
+	nextShuffle := !m.shuffle
+	path := "playback/shuffle/off"
+	if nextShuffle {
+		path = "playback/shuffle/on"
 	}
-	return nil
+
+	var shuffleCommandID int
+	if m.selected != "" {
+		if m.pendingShuffleCommandID == 0 {
+			m.pendingShuffleBase = m.shuffle
+			m.acknowledgedShuffle = m.shuffle
+			m.acknowledgedShuffleID = 0
+		}
+		m.shuffle = nextShuffle
+		m.shuffleCommandID++
+		shuffleCommandID = m.shuffleCommandID
+		m.pendingShuffleCommandID = shuffleCommandID
+	}
+
+	return playbackControlCmd(m.selected, path, playbackControlMsg{
+		action:           playbackControlShuffle,
+		shuffle:          nextShuffle,
+		shuffleCommandID: shuffleCommandID,
+	})
 }
 
 // will use the config to cycle through the library options, it will check the current selected library and increment to the next one, if it is the last one it will go back to the first one

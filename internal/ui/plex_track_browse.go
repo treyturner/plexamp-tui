@@ -18,6 +18,7 @@ type tracksFetchedMsg struct {
 
 type trackPlaybackMsg struct {
 	success   bool
+	selected  string
 	requestID int
 	ratingKey string
 	err       error
@@ -190,6 +191,7 @@ func (m *model) playTrackCmd(ratingKey string, requestID int) tea.Cmd {
 		if err != nil {
 			return trackPlaybackMsg{
 				success:   false,
+				selected:  serverIP,
 				requestID: requestID,
 				ratingKey: ratingKey,
 				err:       err,
@@ -197,6 +199,7 @@ func (m *model) playTrackCmd(ratingKey string, requestID int) tea.Cmd {
 		}
 		return trackPlaybackMsg{
 			success:   true,
+			selected:  serverIP,
 			requestID: requestID,
 			ratingKey: ratingKey,
 		}
@@ -230,8 +233,7 @@ func (m *model) handleTrackBrowseUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				m.debug("Playing track: %s (ratingKey: %s)", selected.title, selected.ratingKey)
 				m.lastCommand = fmt.Sprintf("Playing %s", selected.title)
-				m.trackPlaybackReqID++
-				requestID := m.trackPlaybackReqID
+				requestID := m.nextTrackPlaybackRequestID()
 				m.beginPlaybackPendingForTrack("Loading track...", selected.ratingKey)
 				return m, m.playTrackCmd(selected.ratingKey, requestID)
 			}
